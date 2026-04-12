@@ -17,9 +17,9 @@
 - [x] **DONE** 1.4 设置基本的插件目录结构（Background, Content Script, Options Page, Popup）。
 
 ## 阶段二：本地数据层设计与实现 (Phase 2: Local Data Layer - Dexie.js)
-- [ ] **TODO** 2.1 定义 IndexedDB 数据库结构 (Schema)，包括 `Settings`, `Resources`, `Projects`, `Allocations`, `JiraWorklogs`。
-- [ ] **TODO** 2.2 实现基础的 CRUD 业务逻辑服务层 (Data Access Layer)。
-- [ ] **TODO** 2.3 实现对 `chrome.storage.local` 的封装（用于敏感信息如 API Key 的存储）。
+- [x] **DONE** 2.1 定义 IndexedDB 数据库结构 (Schema)，包括 `Settings`, `Resources`, `Projects`, `Allocations`, `JiraWorklogs`。
+- [x] **DONE** 2.2 实现基础的 CRUD 业务逻辑服务层 (Data Access Layer)。
+- [x] **DONE** 2.3 实现对 `chrome.storage.local` 的封装（用于敏感信息如 API Key 的存储）。
 
 ## 阶段三：核心业务逻辑服务 (Phase 3: Core Business Services)
 - [ ] **TODO** 3.1 **Jira 同步服务 (Jira Sync Service)**
