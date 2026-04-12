@@ -58,6 +58,13 @@ export class PlannerDatabase extends Dexie {
       jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
       settings: 'key'
     });
+    
+    this.version(2).stores({
+      projects: '++id, name, status, priority, digitalResponsible' // Updated for Google Sheets
+    }).upgrade(tx => {
+      // Clear old jira projects since schema fundamentally changed
+      return tx.table('projects').clear();
+    });
   }
 }
 
