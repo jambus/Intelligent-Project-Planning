@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kill Project Planning</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-title">
+        <span class="header-icon">⚡</span>
+        <h1>Kill Project Planning</h1>
+      </div>
+      <a href="options.html" target="_blank" class="settings-btn" id="settings-link" title="Settings">⚙️</a>
+    </header>
+
+    <div id="api-key-warning" class="warning-banner hidden">
+      ⚠️ No API key set. <a href="options.html" target="_blank">Add your OpenAI key →</a>
+    </div>
+
+    <section class="add-project-section">
+      <h2>New Project</h2>
+      <form id="add-project-form" class="add-project-form">
+        <input
+          type="text"
+          id="project-name"
+          placeholder="Project name"
+          required
+          maxlength="100"
+          autocomplete="off"
+        />
+        <textarea
+          id="project-description"
+          placeholder="Describe your project (AI will use this to generate a plan)"
+          rows="3"
+          maxlength="500"
+        ></textarea>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">+ Add Project</button>
+          <label class="checkbox-label">
+            <input type="checkbox" id="auto-plan" />
+            <span>Auto-generate AI plan</span>
+          </label>
+        </div>
+      </form>
+    </section>
+
+    <section class="projects-section">
+      <div class="projects-header">
+        <h2>Projects <span id="project-count" class="count-badge">0</span></h2>
+      </div>
+      <div id="projects-list" class="projects-list">
+        <div class="empty-state">
+          <span class="empty-icon">🚀</span>
+          <p>No projects yet. Add one above to get started!</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="project-detail-modal" class="modal hidden">
+    <div class="modal-overlay" id="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-project-name"></h2>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

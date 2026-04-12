@@ -1,0 +1,233 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-primary: #0f1117;
+  --bg-secondary: #1a1d27;
+  --bg-card: #1e2130;
+  --bg-input: #252838;
+  --border: #2e3148;
+  --accent: #6c63ff;
+  --accent-hover: #5a52d5;
+  --accent-danger: #ff4757;
+  --accent-success: #2ed573;
+  --text-primary: #e8eaf6;
+  --text-secondary: #8b91b0;
+  --text-muted: #555a7a;
+  --radius: 8px;
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.options-app {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 0 40px;
+}
+
+.options-header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 32px;
+  margin-bottom: 32px;
+}
+
+.header-icon {
+  font-size: 28px;
+}
+
+.options-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.options-main {
+  padding: 0 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.options-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.options-section h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+
+.hint a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.hint a:hover {
+  text-decoration: underline;
+}
+
+.hint-inline {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.input-group input {
+  flex: 1;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  padding: 10px 14px;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+}
+
+input::placeholder {
+  color: var(--text-muted);
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238b91b0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+
+.btn {
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 20px;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-ghost {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 10px 14px;
+}
+
+.btn-ghost:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid rgba(255, 71, 87, 0.4);
+  color: var(--accent-danger);
+}
+
+.btn-danger:hover {
+  background: rgba(255, 71, 87, 0.1);
+}
+
+.options-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.status-message {
+  border-radius: var(--radius);
+  font-size: 13px;
+  padding: 10px 16px;
+  text-align: center;
+}
+
+.status-message.success {
+  background: rgba(46, 213, 115, 0.15);
+  border: 1px solid rgba(46, 213, 115, 0.3);
+  color: var(--accent-success);
+}
+
+.status-message.error {
+  background: rgba(255, 71, 87, 0.15);
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  color: var(--accent-danger);
+}
+
+.hidden {
+  display: none !important;
+}

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kill Project Planning – Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="options-app">
+    <header class="options-header">
+      <span class="header-icon">⚡</span>
+      <h1>Kill Project Planning – Settings</h1>
+    </header>
+
+    <main class="options-main">
+      <section class="options-section">
+        <h2>OpenAI API Key</h2>
+        <p class="hint">
+          Required for AI project planning. Get yours at
+          <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a>.
+          Your key is stored locally and never sent anywhere except OpenAI.
+        </p>
+        <div class="input-group">
+          <input
+            type="password"
+            id="api-key-input"
+            placeholder="sk-..."
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="toggle-key" class="btn btn-ghost" type="button" title="Show/hide key">👁</button>
+        </div>
+      </section>
+
+      <section class="options-section">
+        <h2>Model Settings</h2>
+        <div class="field">
+          <label for="model-select">OpenAI Model</label>
+          <select id="model-select">
+            <option value="gpt-4o-mini">gpt-4o-mini (fast &amp; cheap)</option>
+            <option value="gpt-4o">gpt-4o (best quality)</option>
+            <option value="gpt-4-turbo">gpt-4-turbo</option>
+            <option value="gpt-3.5-turbo">gpt-3.5-turbo (legacy)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="max-tokens-input">Max Tokens <span class="hint-inline">(500–4000)</span></label>
+          <input type="number" id="max-tokens-input" min="500" max="4000" step="100" value="2000" />
+        </div>
+      </section>
+
+      <div class="options-actions">
+        <button id="save-btn" class="btn btn-primary" type="button">💾 Save Settings</button>
+        <button id="clear-btn" class="btn btn-danger" type="button">🗑 Clear All Data</button>
+      </div>
+
+      <div id="status-message" class="status-message hidden"></div>
+    </main>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
