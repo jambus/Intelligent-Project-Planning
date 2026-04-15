@@ -1,11 +1,12 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, FolderKanban } from 'lucide-react';
 
 export const Layout = () => {
   const location = useLocation();
 
   const navItems = [
     { name: '仪表盘', path: '/', icon: <LayoutDashboard size={20} /> },
+    { name: '项目管理', path: '/projects', icon: <FolderKanban size={20} /> },
     { name: '人员管理', path: '/resources', icon: <Users size={20} /> },
     { name: '系统设置', path: '/settings', icon: <Settings size={20} /> },
   ];
