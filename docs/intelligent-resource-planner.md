@@ -19,10 +19,11 @@
 4.  **实时预警 (Jira 联动)**：当 PM 浏览 Jira 页面时，插件的 Content Script 实时读取本地缓存的排期数据，在页面上无侵入式注入并提示当前项目指派人的资源超载/闲置风险。
 
 ### 1.4 核心功能模块 (Core Features)
-*   **全局仪表盘 (Dashboard)**：作为插件的 Options 页面存在，显示资源的分配情况和一键排期功能。
+*   **全局仪表盘 (Dashboard)**：作为插件的 Options 首页，显示当前资源分配概览，并提供一键触发 AI 排期的入口。
+*   **项目管理 (Project Management)**：独立页面，展示所有待排期项目的详细清单（项目名、负责人、起止日期、评估工时等），并支持按优先级从高到低自动排序。
 *   **智能排期引擎 (AI Scheduler)**：纯前端组装 Prompt，支持用户配置自定义 API Base URL 和模型名称，兼容 OpenAI 协议（如 DeepSeek, Qwen, Claude 等）。
 *   **资源图谱与技能管理**：本地化的人员画像管理。
-*   **本地文件导入 (CSV/XLSX Import)**：支持通过本地文件直接批量导入排期项目数据，覆盖本地已存数据。
+*   **本地文件导入 (CSV/XLSX Import)**：支持通过手动上传 CSV 或 Excel 批量导入项目，系统会自动执行全量覆盖更新。
 *   **Jira 预警机制 (Alerts)**：对资源超量分配进行红绿灯预警，并在 Jira 原生 Issue 页面中悬浮展示。
 
 ---
@@ -43,7 +44,10 @@ graph TD
         
         %% UI 视图层
         subgraph Views [视图层 (React)]
-            OptionsPage[全局仪表盘 / 管理后台 (Options Page)]
+            OptionsPage[全局仪表盘 (Dashboard)]
+            ProjectMgmt[项目管理 (Projects)]
+            ResourcesMgmt[人员管理 (Resources)]
+            SettingsPage[系统设置 (Settings)]
             Popup[快捷操作面板 (Popup)]
             ContentScript[Jira 页面 UI 注入 (Content Script)]
         end
@@ -94,9 +98,9 @@ graph TD
 *   `Allocations`: 资源分配表（关联 Resource ID, Project ID，分配的开始-结束日期，投入工时比例）。
 
 ### 3.3 关键技术方案 (Key Technical Solutions)
-#### 3.3.1 本地文件导入策略 (CSV/XLSX Import)
-*   **操作逻辑**：用户在 Options 设置页通过 `FileReader` 和 `xlsx` 库解析文件内容。
-*   **覆盖策略**：每次导入时先清空本地 `Projects` 表，实现全量覆盖更新。
+#### 3.3.1 本地文件导入与项目管理
+*   **覆盖策略**：用户在 Options 设置页通过 `FileReader` 和 `xlsx` 库解析文件。为了保证排期的一致性，系统在每次导入时会执行 `db.projects.clear()`，实现数据的全量覆盖。
+*   **优先级排序**：项目管理页面实现了智能排序逻辑，支持将 'High/Medium/Low' 或 'P0-P3' 等权重标签映射为数值，实现从高优先级到低优先级的自动列表呈现。
 
 #### 3.3.2 安全的 AI 调用与精准排期
 *   **API Key 存储**：引导用户输入其私有的 OpenAI API Key，并安全地存储在 `chrome.storage.local` 中（该存储空间不与网页共享，相对安全）。
