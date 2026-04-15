@@ -1,5 +1,4 @@
 import { getStorageItem } from '../utils/storage';
-import { db } from '../db';
 
 interface JiraSettings {
   domain: string; // e.g., "https://your-domain.atlassian.net"
@@ -32,39 +31,6 @@ const fetchFromJira = async (endpoint: string, settings: JiraSettings) => {
     throw new Error(`Jira API error: ${response.status} ${response.statusText}`);
   }
   return response.json();
-};
-
-/**
- * Fetch projects from Jira and sync them to the local database
- */
-export const syncJiraProjects = async (): Promise<void> => {
-  const settings = await getJiraSettings();
-  if (!settings) throw new Error('Jira settings not configured.');
-
-  try {
-    const projectsData = await fetchFromJira('project/search?maxResults=50', settings);
-    
-    for (const p of projectsData.values) {
-      const projectType = p.projectTypeKey === 'software' ? 'High' : 'Medium'; // naive priority logic
-      
-      const existing = await db.projects.where('jiraProjectId').equals(p.id).first();
-      if (!existing) {
-        await db.projects.add({
-          jiraProjectId: p.id,
-          jiraProjectKey: p.key,
-          name: p.name,
-          priority: projectType as any,
-          startDate: new Date().toISOString().split('T')[0], // placeholder
-          endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // placeholder +90 days
-          status: 'To Do',
-        });
-      }
-    }
-    console.log(`Synced ${projectsData.values.length} projects from Jira.`);
-  } catch (error) {
-    console.error('Failed to sync Jira projects:', error);
-    throw error;
-  }
 };
 
 /**

@@ -10,13 +10,16 @@ export interface Resource {
 
 export interface Project {
   id?: number;
-  jiraProjectId: string;
-  jiraProjectKey: string;
-  name: string;
-  priority: 'High' | 'Medium' | 'Low';
-  startDate: string; // ISO date
-  endDate: string; // ISO date
-  status: 'To Do' | 'In Progress' | 'Done';
+  name: string; // Project (项目名称)
+  businessOwner: string; // Business Owner
+  priority: string; // Priority Proposal
+  status: string; // Status (项目状态)
+  digitalResponsible: string; // Digital Responsible
+  startDate: string; // Start In (期望开始时间)
+  endDate: string; // End In (期望结束时间)
+  comments: string; // Comments
+  devTotalMd: number; // Dev Total MD (开发评估总天数)
+  testTotalMd: number; // Test Total MD (测试评估总天数)
 }
 
 export interface Allocation {
