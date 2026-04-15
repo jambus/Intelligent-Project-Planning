@@ -1,20 +1,33 @@
-# GEMINI.md - Project Planning with AI
+# GEMINI.md - Intelligent Resource Planner (AI-Powered)
 
-## Directory Overview
-This repository, **Kill-Project-Planning**, is dedicated to streamlining and enhancing project planning processes through the use of Artificial Intelligence. It serves as a centralized hub for planning documents, AI prompts, and strategic frameworks designed to reduce the overhead of traditional project management.
+## Project Overview
+**Kill-Project-Planning** has evolved into the **Intelligent Resource Planner (IRP)**, a Local-first Chrome Extension designed to streamline R&D resource scheduling. It uses AI (OpenAI) to automatically assign R&D resources (Frontend, Backend, Test, etc.) to projects based on priority, skills, and man-day (MD) estimates imported from CSV/XLSX files. It also provides real-time workload alerts directly on the Jira UI.
 
-## Key Files
-- **README.md**: Provides a high-level vision statement: "Say byebye for project planning, use AI to plan."
-- **LICENSE**: The project is licensed under the Apache License 2.0.
-- **GEMINI.md**: This file, serving as the instructional context for AI agents interacting with the repository.
+## Architecture
+- **Environment**: Chrome Extension (Manifest V3).
+- **Frontend**: React 19 + TypeScript + Tailwind CSS.
+- **Storage**: Local-first via IndexedDB (Dexie.js) and `chrome.storage.local`.
+- **Integrations**: 
+  - **Data Source**: Manual CSV/XLSX file import for project lists.
+  - **AI Engine**: OpenAI API for intelligent scheduling.
+  - **Overlay**: Content Script injection on Jira issue pages for resource load warnings.
 
-## Usage
-The contents of this directory are intended to be used as follows:
-1. **Strategic Planning**: Utilize AI agents to generate project roadmaps, task breakdowns, and risk assessments based on minimal input.
-2. **Contextual Guidance**: Use the `GEMINI.md` file to maintain a consistent persona and set of instructions for any AI tools or agents assisting with the project.
-3. **Template Repository**: As the project evolves, this directory will likely house templates and successful prompt sequences that can be reused across different planning phases.
+## Key Files & Directories
+- `extension/src/`: Core source code (Background, Content Scripts, Options Page, Popup).
+- `extension/src/db/`: Database schema and Dexie services.
+- `extension/src/services/`: AI scheduling, file import, and Jira API utilities.
+- `docs/DEVELOPMENT.md`: **Crucial** - Detailed local setup and build instructions.
+- `docs/intelligent-resource-planner.md`: Full PRD, system architecture diagrams, and design specs.
+- `docs/TASKS.md`: Project roadmap and current task status.
 
-## Future Development
-- [ ] Add project planning templates.
-- [ ] Integrate AI-driven task estimation tools.
-- [ ] Define automated workflows for updating project status via AI.
+## Usage for AI Agents
+1.  **Context First**: Always refer to `docs/intelligent-resource-planner.md` for functional requirements and architectural decisions.
+2.  **Maintenance**: 
+    - Keep `docs/DEVELOPMENT.md` updated if build scripts or dependencies change.
+    - Synchronize PRD docs in `docs/intelligent-resource-planner.md` with any functional or design changes.
+3.  **Local-First Mandate**: This is a serverless, local-first application. Do NOT introduce external backend dependencies unless explicitly requested.
+
+## Building and Running
+Refer to [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) for environment setup and build commands.
+- Dev: `npm run dev`
+- Build: `npm run build`
