@@ -4,18 +4,20 @@ import type { Resource, Project, Allocation } from '../db';
 export interface AISettings {
   apiKey: string;
   model: string;
+  baseUrl: string;
 }
 
 export const getAISettings = async (): Promise<AISettings | null> => {
   const apiKey = await getStorageItem<string>('openAiApiKey');
   const model = await getStorageItem<string>('openAiModel') || 'gpt-4o-mini';
+  const baseUrl = await getStorageItem<string>('openAiBaseUrl') || 'https://api.openai.com/v1';
   
   if (!apiKey) return null;
-  return { apiKey, model };
+  return { apiKey, model, baseUrl };
 };
 
 /**
- * Generate a schedule using OpenAI
+ * Generate a schedule using AI (OpenAI compatible)
  */
 export const generateSchedule = async (
   resources: Resource[],
@@ -23,7 +25,7 @@ export const generateSchedule = async (
 ): Promise<Partial<Allocation>[]> => {
   const settings = await getAISettings();
   if (!settings) {
-    throw new Error('OpenAI API Key is not configured. Please set it in Options.');
+    throw new Error('AI API Key is not configured. Please set it in Options.');
   }
 
   const prompt = `
@@ -51,7 +53,8 @@ JSON Schema per allocation object:
 }
 `;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const url = `${settings.baseUrl.replace(/\/$/, '')}/chat/completions`;
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -8,6 +8,8 @@ export const Settings = () => {
   const [jiraEmail, setJiraEmail] = useState('');
   const [jiraToken, setJiraToken] = useState('');
   const [openAiKey, setOpenAiKey] = useState('');
+  const [aiBaseUrl, setAiBaseUrl] = useState('https://api.openai.com/v1');
+  const [aiModel, setAiModel] = useState('gpt-4o-mini');
   
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -21,6 +23,8 @@ export const Settings = () => {
       setJiraEmail(await getStorageItem('jiraEmail') || '');
       setJiraToken(await getStorageItem('jiraApiToken') || '');
       setOpenAiKey(await getStorageItem('openAiApiKey') || '');
+      setAiBaseUrl(await getStorageItem('openAiBaseUrl') || 'https://api.openai.com/v1');
+      setAiModel(await getStorageItem('openAiModel') || 'gpt-4o-mini');
     };
     loadSettings();
   }, []);
@@ -33,6 +37,8 @@ export const Settings = () => {
       await setStorageItem('jiraEmail', jiraEmail);
       await setStorageItem('jiraApiToken', jiraToken);
       await setStorageItem('openAiApiKey', openAiKey);
+      await setStorageItem('openAiBaseUrl', aiBaseUrl);
+      await setStorageItem('openAiModel', aiModel);
       
       setMessage({ type: 'success', text: '设置已保存成功！' });
     } catch (err) {
@@ -142,18 +148,39 @@ export const Settings = () => {
 
           {/* AI Section */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 border-b pb-2 mb-4">OpenAI 配置</h3>
+            <h3 className="text-lg font-medium text-gray-900 border-b pb-2 mb-4">AI 排期引擎配置 (OpenAI 兼容)</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">API Base URL</label>
                 <input 
-                  type="password" 
-                  placeholder="sk-..."
+                  type="url" 
+                  placeholder="https://api.openai.com/v1"
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  value={openAiKey} onChange={e => setOpenAiKey(e.target.value)}
+                  value={aiBaseUrl} onChange={e => setAiBaseUrl(e.target.value)}
                 />
-                <p className="text-xs text-gray-500 mt-1">您的 Key 仅会加密保存在浏览器本地，不会上传到任何第三方服务器。</p>
+                <p className="text-xs text-gray-500 mt-1">支持 DeepSeek, Qwen, Claude 等兼容 OpenAI 协议的接口。</p>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                  <input 
+                    type="password" 
+                    placeholder="sk-..."
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    value={openAiKey} onChange={e => setOpenAiKey(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">模型名称 (Model Name)</label>
+                  <input 
+                    type="text" 
+                    placeholder="gpt-4o-mini"
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    value={aiModel} onChange={e => setAiModel(e.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">您的 Key 仅会加密保存在浏览器本地，不会上传到任何第三方服务器。</p>
             </div>
           </div>
 
