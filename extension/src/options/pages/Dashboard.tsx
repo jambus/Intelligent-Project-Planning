@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { draftInitialSchedule, refineGaps } from '../../services/ai';
-import { Play, Users, ChevronDown, ArrowRight, ClipboardList, AlertTriangle, FileWarning, Search, TriangleAlert, User, Briefcase, RefreshCcw } from 'lucide-react';
+import { Play, Users, ChevronDown, ArrowRight, ClipboardList, AlertTriangle, FileWarning, Search, TriangleAlert, User, Briefcase, RefreshCcw, CheckCircle2 } from 'lucide-react';
 import { calculateMonthlyMD, getWorkingDays } from '../../utils/dateUtils';
 
 export const Dashboard = () => {
@@ -12,6 +12,7 @@ export const Dashboard = () => {
   
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleStatus, setScheduleStatus] = useState('');
+  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3>(0);
   const [error, setError] = useState<string | null>(null);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [groupMode, setGroupMode] = useState<'resource' | 'project'>('resource');
@@ -86,60 +87,86 @@ export const Dashboard = () => {
     
     try {
       console.group('🚀 智能排期深度追踪');
-      setScheduleStatus('🚀 第一阶段：生成全局初稿...');
+      
+      // Phase 1: Drafting
+      setCurrentStep(1);
+      setScheduleStatus('🚀 阶段一：正在生成全局初稿...');
       await db.allocations.clear();
       
       const firstPass = await draftInitialSchedule(resources, readyProjects, selectedYear);
-      console.log('[Dashboard] Phase 1 AI Result:', firstPass);
+      console.log('[Dashboard] AI Phase 1 Raw Result:', firstPass);
 
-      const saveToDb = async (list: any[]) => {
-        let count = 0;
-        for (const a of list) {
-          if (!a.resourceId || !a.projectId || !a.startDate || !a.endDate) continue;
-          
-          const workingDays = getWorkingDays(new Date(a.startDate), new Date(a.endDate));
-          const md = Math.round((workingDays * (a.allocationPercentage || 0)) / 100);
-          
-          if (md >= 1) {
-            await db.allocations.add({
-              resourceId: Number(a.resourceId),
-              projectId: Number(a.projectId),
-              allocationPercentage: Number(a.allocationPercentage) || 100,
-              startDate: a.startDate,
-              endDate: a.endDate,
-            });
-            count++;
-          }
-        }
-        return count;
-      };
+      const toInsertP1 = firstPass.filter(a => {
+        if (!a.resourceId || !a.projectId || !a.startDate || !a.endDate) return false;
+        const workingDays = getWorkingDays(new Date(a.startDate), new Date(a.endDate));
+        const md = Math.round((workingDays * (a.allocationPercentage || 0)) / 100);
+        return md >= 1;
+      }).map(a => ({
+        resourceId: Number(a.resourceId),
+        projectId: Number(a.projectId),
+        allocationPercentage: Number(a.allocationPercentage) || 100,
+        startDate: a.startDate!,
+        endDate: a.endDate!,
+      }));
 
-      const p1Saved = await saveToDb(firstPass);
-      console.log('[Dashboard] Phase 1 Saved Records:', p1Saved);
-
-      // Phase 2 Audit
-      setScheduleStatus('🔍 第二阶段：自动审计资源缺口...');
-      const latestAllocations = await db.allocations.toArray();
-      const { gaps, idle } = runAudit(readyProjects, resources, latestAllocations);
-      console.log('[Dashboard] Audit Gaps:', gaps);
-      console.log('[Dashboard] Audit Idle:', idle);
-
-      if (gaps.length > 0 && idle.length > 0) {
-        setScheduleStatus(`🛠️ 第三阶段：执行精准补排 (${gaps.length}个缺口)...`);
-        const secondPass = await refineGaps(gaps, idle, selectedYear);
-        console.log('[Dashboard] Phase 2 AI Result:', secondPass);
-        const p2Saved = await saveToDb(secondPass);
-        console.log('[Dashboard] Phase 2 Saved Records:', p2Saved);
+      if (toInsertP1.length > 0) {
+        await db.allocations.bulkAdd(toInsertP1);
+        console.log('[Dashboard] Phase 1 Saved:', toInsertP1.length, 'records');
+      } else {
+        console.warn('[Dashboard] Phase 1 produced NO valid allocations.');
       }
       
-      setScheduleStatus('✨ 排期优化完成！');
+      // Force UI to update and show Phase 1 results
+      setScheduleStatus(`✅ 初稿已就绪 (${toInsertP1.length}项)，准备深度审计...`);
+      setCurrentStep(2);
+      await new Promise(resolve => setTimeout(resolve, 1000)); 
+      
+      // Phase 2: Audit & Refine
+      const latestAllocations = await db.allocations.toArray();
+      const { gaps, idle } = runAudit(readyProjects, resources, latestAllocations);
+      console.log('[Dashboard] Audit Result - Gaps:', gaps.length, 'Idle:', idle.length);
+
+      if (gaps.length > 0 && idle.length > 0) {
+        setScheduleStatus(`🛠️ 阶段二：检测到 ${gaps.length} 处缺口，正在精准优化...`);
+        const secondPass = await refineGaps(gaps, idle);
+        console.log('[Dashboard] AI Phase 2 Raw Result:', secondPass);
+
+        const toInsertP2 = secondPass.filter(a => {
+          if (!a.resourceId || !a.projectId || !a.startDate || !a.endDate) return false;
+          const workingDays = getWorkingDays(new Date(a.startDate), new Date(a.endDate));
+          const md = Math.round((workingDays * (a.allocationPercentage || 0)) / 100);
+          return md >= 1;
+        }).map(a => ({
+          resourceId: Number(a.resourceId),
+          projectId: Number(a.projectId),
+          allocationPercentage: Number(a.allocationPercentage) || 100,
+          startDate: a.startDate!,
+          endDate: a.endDate!,
+        }));
+
+        if (toInsertP2.length > 0) {
+          await db.allocations.bulkAdd(toInsertP2);
+          console.log('[Dashboard] Phase 2 Saved:', toInsertP2.length, 'records');
+          setScheduleStatus(`✨ 优化成功：已额外补齐 ${toInsertP2.length} 项分配！`);
+        } else {
+          setScheduleStatus('🎉 自动审计完成，当前已是最佳排期方案。');
+        }
+      } else {
+        setScheduleStatus('🎉 初始排期已非常完美，无需额外优化。');
+      }
+      
+      setCurrentStep(3);
       console.groupEnd();
-      setTimeout(() => setScheduleStatus(''), 3000);
+      setTimeout(() => {
+        setScheduleStatus('');
+        setCurrentStep(0);
+      }, 6000);
     } catch (err: any) {
       console.error('[Dashboard] ❌ Scheduling Failed:', err);
       console.groupEnd();
       setError(err.message);
       setShowErrorModal(true);
+      setCurrentStep(0);
     } finally {
       setIsScheduling(false);
     }
@@ -147,14 +174,25 @@ export const Dashboard = () => {
 
   return (
     <div className="space-y-6 pb-20">
-      {/* ... (Keep the rest of the render logic as is) ... */}
       <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">全局排期大盘</h2>
-          <p className="text-gray-500 mt-1 flex items-center space-x-2">
-            {isScheduling ? <RefreshCcw size={14} className="animate-spin text-blue-600" /> : null}
-            <span>{scheduleStatus || 'AI 迭代排期架构：初稿 -> 审计 -> 补排'}</span>
-          </p>
+        <div className="flex items-center space-x-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 tracking-tight">全局排期大盘</h2>
+            <div className="flex items-center space-x-3 mt-1.5 min-h-[20px]">
+              {isScheduling && <RefreshCcw size={14} className="animate-spin text-blue-600" />}
+              {!isScheduling && currentStep === 3 && <CheckCircle2 size={14} className="text-green-500" />}
+              <span className={`text-xs font-bold ${isScheduling ? 'text-blue-600' : currentStep === 3 ? 'text-green-600' : 'text-gray-400'}`}>
+                {scheduleStatus || 'AI 迭代排期架构：初稿 -> 审计 -> 补排'}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center space-x-1 ml-4">
+            {[1, 2, 3].map(step => (
+              <div key={step} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                currentStep >= step ? 'bg-blue-500 scale-125' : 'bg-gray-200'
+              }`} />
+            ))}
+          </div>
         </div>
         
         <div className="flex items-center space-x-3 bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
@@ -184,10 +222,14 @@ export const Dashboard = () => {
           <button 
             onClick={handleGenerateSchedule}
             disabled={isScheduling || !readyProjects.length || !resources?.length}
-            className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white px-6 py-2.5 rounded-xl font-bold text-sm disabled:opacity-50 transition-all shadow-lg shadow-blue-100"
+            className={`flex items-center space-x-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg ${
+              isScheduling 
+                ? 'bg-blue-100 text-blue-400 cursor-not-allowed shadow-none' 
+                : 'bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white shadow-blue-100'
+            }`}
           >
             <Play size={16} className={isScheduling ? "animate-pulse" : ""} />
-            <span>{isScheduling ? '智能迭代优化中...' : '一键 AI 智能排期'}</span>
+            <span>{isScheduling ? '正在迭代优化...' : '一键 AI 智能排期'}</span>
           </button>
         </div>
       </div>
@@ -215,7 +257,7 @@ export const Dashboard = () => {
         </div>
       )}
 
-      {/* Analysis Summary Cards */}
+      {/* Stats row */}
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-2">
