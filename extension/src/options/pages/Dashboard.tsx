@@ -96,11 +96,6 @@ export const Dashboard = () => {
     if (!resources || !readyProjects.length) return;
     
     console.group('🚀 AI 智能排期流程启动');
-    console.log('[Dashboard] Target Year:', selectedYear);
-    console.log('[Dashboard] Selected Range:', `${startMonth}月 - ${endMonth}月`);
-    console.log('[Dashboard] Resources being sent:', resources);
-    console.log('[Dashboard] Projects being sent:', readyProjects);
-
     setIsScheduling(true);
     setError(null);
     try {
@@ -109,20 +104,30 @@ export const Dashboard = () => {
       
       const newAllocations = await generateSchedule(resources, readyProjects, selectedYear);
       
-      console.log('[Dashboard] 💾 Saving new allocations to DB:', newAllocations.length, 'records');
+      console.log('[Dashboard] 🔍 Validating and saving allocations...');
+      let savedCount = 0;
       
       for (const alloc of newAllocations) {
-        if (alloc.resourceId && alloc.projectId) {
-          await db.allocations.add({
-            resourceId: alloc.resourceId,
-            projectId: alloc.projectId,
-            allocationPercentage: alloc.allocationPercentage || 100,
-            startDate: alloc.startDate || `${selectedYear}-01-01`,
-            endDate: alloc.endDate || `${selectedYear}-12-31`,
-          });
+        if (alloc.resourceId && alloc.projectId && alloc.startDate && alloc.endDate) {
+          // Double check the MD calculation on the client side
+          const workingDays = getWorkingDays(new Date(alloc.startDate), new Date(alloc.endDate));
+          const calculatedMd = Math.round((workingDays * (alloc.allocationPercentage || 0)) / 100);
+          
+          if (calculatedMd >= 1) {
+            await db.allocations.add({
+              resourceId: alloc.resourceId,
+              projectId: alloc.projectId,
+              allocationPercentage: alloc.allocationPercentage || 100,
+              startDate: alloc.startDate,
+              endDate: alloc.endDate,
+            });
+            savedCount++;
+          } else {
+            console.warn('[Dashboard] ⚠️ Filtering out invalid 0-day allocation:', alloc);
+          }
         }
       }
-      console.log('[Dashboard] ✨ AI Scheduling Completed Successfully!');
+      console.log(`[Dashboard] ✨ Successfully saved ${savedCount} valid allocations.`);
     } catch (err: any) {
       console.error('[Dashboard] ❌ Scheduling Failed:', err);
       setError(err.message);
