@@ -95,6 +95,11 @@ graph TD
 *   `Settings`: 存储配置（也可以直接放 `chrome.storage.local`）。
 *   `Resources`: 研发人员表（包含姓名、角色、可用工时、能力标签 JSON）。
 *   `Projects` (v2): 项目表，对齐导入文件的列（`name`, `businessOwner`, `priority`, `status`, `digitalResponsible`, `startDate`, `endDate`, `comments`, `devTotalMd`, `testTotalMd`）。
+*   **导入样例 (Import Sample)**:
+    | Project | Business Owner | Priority Proposal | Status | Digital Responsible | Start In | End In | Estimated Go-live time | Comments | Jira Epic Key | Total Dev MD | Total Test MD |
+    | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+    | 618 Campaign digital capabilities optimization | Digital | Must Win | Design | Zac CAI | Apr | Jun | Jun | | COMMON | 10 | 5 |
+    | Ingress Nginx Migration | Digital | Compliance | Development | Justin XU | | | May | | Ingress | 10 | 5 |
 *   `Allocations`: 资源分配表（关联 Resource ID, Project ID，分配的开始-结束日期，投入工时比例）。
 
 ### 3.3 关键技术方案 (Key Technical Solutions)

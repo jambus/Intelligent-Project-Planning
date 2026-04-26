@@ -95,14 +95,14 @@ export const Projects = () => {
           <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-xs uppercase tracking-wider">
-                <th className="p-4 font-semibold">项目名称</th>
+                <th className="p-4 font-semibold">项目名称 / Epic</th>
                 <th className="p-4 font-semibold">优先级</th>
                 <th className="p-4 font-semibold">负责人</th>
                 <th className="p-4 font-semibold">业务方</th>
                 <th className="p-4 font-semibold">状态</th>
                 <th className="p-4 font-semibold text-center">开发人天</th>
                 <th className="p-4 font-semibold text-center">测试人天</th>
-                <th className="p-4 font-semibold">起止日期</th>
+                <th className="p-4 font-semibold">上线时间 / 周期</th>
               </tr>
             </thead>
             <tbody>
@@ -120,7 +120,10 @@ export const Projects = () => {
                 <tr key={p.id} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors group">
                   <td className="p-4">
                     <div className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{p.name}</div>
-                    {p.comments && <div className="text-xs text-gray-400 mt-1 truncate max-w-xs">{p.comments}</div>}
+                    <div className="flex items-center space-x-2 mt-1">
+                      {p.jiraEpicKey && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{p.jiraEpicKey}</span>}
+                      {p.comments && <div className="text-xs text-gray-400 truncate max-w-[150px]">{p.comments}</div>}
+                    </div>
                   </td>
                   <td className="p-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
@@ -151,7 +154,8 @@ export const Projects = () => {
                     </span>
                   </td>
                   <td className="p-4 text-xs text-gray-400 whitespace-nowrap">
-                    {p.startDate} <br/> {p.endDate}
+                    {p.estimatedGoLiveTime && <div className="text-blue-600 font-semibold mb-1">Go-live: {p.estimatedGoLiveTime}</div>}
+                    <div className="opacity-70">{p.startDate} ~ {p.endDate}</div>
                   </td>
                 </tr>
               ))}

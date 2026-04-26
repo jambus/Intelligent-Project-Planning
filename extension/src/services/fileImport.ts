@@ -28,9 +28,11 @@ export const importProjectsFromFile = async (file: File): Promise<number> => {
             digitalResponsible: row[4]?.toString() || '',
             startDate: row[5]?.toString() || '',
             endDate: row[6]?.toString() || '',
-            comments: row[7]?.toString() || '',
-            devTotalMd: Number(row[8]) || 0,
-            testTotalMd: Number(row[9]) || 0,
+            estimatedGoLiveTime: row[7]?.toString() || '',
+            comments: row[8]?.toString() || '',
+            jiraEpicKey: row[9]?.toString() || '',
+            devTotalMd: Number(row[10]) || 0,
+            testTotalMd: Number(row[11]) || 0,
           };
         }).filter(p => p.name !== 'Unknown Project' || p.businessOwner !== ''); // filter empty rows
 

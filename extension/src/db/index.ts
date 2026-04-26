@@ -17,7 +17,9 @@ export interface Project {
   digitalResponsible: string; // Digital Responsible
   startDate: string; // Start In (期望开始时间)
   endDate: string; // End In (期望结束时间)
+  estimatedGoLiveTime: string; // Estimated Go-live time (预计上线时间)
   comments: string; // Comments
+  jiraEpicKey: string; // Jira Epic Key
   devTotalMd: number; // Dev Total MD (开发评估总天数)
   testTotalMd: number; // Test Total MD (测试评估总天数)
 }
