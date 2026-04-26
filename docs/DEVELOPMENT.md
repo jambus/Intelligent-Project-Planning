@@ -80,17 +80,33 @@
 
 ### 7.1 配置凭证 (Credentials)
 
-在发布前，您需要从 [Google Cloud Console](https://console.cloud.google.com/) 获取以下环境变量：
+您需要准备两类凭证：
 
-1.  `EXTENSION_ID`: 插件在 Web Store 的 ID。
-2.  `CLIENT_ID`: Google OAuth2 Client ID。
-3.  `CLIENT_SECRET`: Google OAuth2 Client Secret。
-4.  `REFRESH_TOKEN`: 通过 OAuth2 流程获取的刷新令牌。
+#### A. 扩展身份
+*   **EXTENSION_ID**: 您插件的 ID (`ofhjhjlmdfjnnadpgfnamljghopgpmfj`)。
+
+#### B. Google Cloud OAuth 凭证 (用于自动化)
+1.  **创建项目**: 在 [Google Cloud Console](https://console.cloud.google.com/) 创建新项目。
+2.  **开启 API**: 在「库」中搜索并启用 **Chrome Web Store API**。
+3.  **同意屏幕**: 在「OAuth 同意屏幕」配置为「外部」，填写应用名称。
+4.  **创建凭据**: 在「凭据」中创建「OAuth 客户端 ID」，类型选 **桌面应用 (Desktop App)**。
+5.  **获取 ID/Secret**: 复制生成的 `CLIENT_ID` 和 `CLIENT_SECRET` 到 `.env`。
+6.  **获取 Token**: 运行 `npx chrome-webstore-upload-cli token`，在浏览器完成授权，将返回的 `REFRESH_TOKEN` 存入 `.env`。
+
 
 ### 7.2 执行发布
 
-在 `extension` 目录下运行：
-```bash
+#### 离线打包 (CRX)
+如果您需要生成 `.crx` 文件进行手动分发：
+1.  确保根目录下存在 `privatekey.pem`。
+2.  运行命令：
+    ```bash
+    npm run crx
+    ```
+    产物将生成在 `release/irp.crx`。
+
+#### 在线上传 (Web Store)
+...```bash
 # 首先设置环境变量 (建议在 .env 或本地 shell 中配置)
 export EXTENSION_ID=your_extension_id
 export CLIENT_ID=your_client_id

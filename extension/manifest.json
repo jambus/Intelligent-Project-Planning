@@ -2,8 +2,7 @@
   "manifest_version": 3,
   "name": "Intelligent Resource Planner",
   "version": "1.0.0",
-  "description": "Intelligent Resource Planner which help project manager and Engineer manager to plan the resources easily even business priority change",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3pdERQts+DXaPV3oIrVyWHCUMphoC5XsoDom/RS3bvoCZXesIrGo+e0D8DI6J0Jz3l08e7a/phdaEKaN3Ai/AS4jMoOea5BXIJkfb0hWnWwuQFIFVK6hHb6m1KC1siG37ulYgZj39yeDBTYVzJST6dEs6OMv1/S9WKolb+Lg+sgbCI/XCevEYu1I24zKGVvXfo8FAqnVV06B4r0IRYzpMQrBuxZjTgHc+l5Y2y986Pp5GkbQaktaSv8j3FdKh+hc+ZB0ZuG/S3faeX5rFAorehoyazjv4XRS7j5R3ux8ZcZjvERbd9PshO+YWJbgOiwSc1y9xvJzgQ7foRW2DcYKNQIDAQAB",
+  "description": "AI-powered R&D resource scheduling and workload alert system for project management.",
   "permissions": [
     "storage",
     "alarms"

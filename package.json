@@ -5,6 +5,7 @@
     "dev": "npm run dev --prefix extension",
     "build": "npm run build --prefix extension",
     "zip": "npm run zip --prefix extension",
+    "crx": "mkdir -p release && npm run build --prefix extension && npx crx3 extension/dist -p privatekey.pem -o release/irp.crx",
     "publish": "npm run publish --prefix extension"
   }
 }
