@@ -4,8 +4,7 @@
   "version": "1.0.0",
   "description": "AI-powered R&D resource scheduling and workload alert system for project management.",
   "permissions": [
-    "storage",
-    "alarms"
+    "storage"
   ],
   "host_permissions": [
     "*://*.atlassian.net/*"
