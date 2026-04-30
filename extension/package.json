@@ -1,13 +1,13 @@
 {
   "name": "extension",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "zip": "mkdir -p release && cd dist && zip -r ../release/irp-v1.0.0.zip .",
-    "publish": "npm run build && npm run zip && npx dotenv-cli -- npx chrome-webstore-upload-cli upload --source release/irp-v1.0.0.zip",
+    "zip": "mkdir -p release && cd dist && zip -r ../release/irp-v1.0.1.zip .",
+    "publish": "npm run build && npm run zip && npx dotenv-cli -- npx chrome-webstore-upload-cli upload --source release/irp-v1.0.1.zip",
     "lint": "eslint .",
     "preview": "vite preview"
   },

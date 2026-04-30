@@ -4,7 +4,7 @@
 
 // 2026 Chinese Public Holidays (Example for the prompt)
 // Simplified list for demo purposes
-const HOLIDAYS_2026 = [
+export let HOLIDAYS = [
   '2026-01-01', // New Year
   '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23', // Spring Festival
   '2026-04-04', '2026-04-05', '2026-04-06', // Qingming Festival
@@ -14,9 +14,14 @@ const HOLIDAYS_2026 = [
 ];
 
 // Special Workdays (Saturdays/Sundays that are workdays)
-const SPECIAL_WORKDAYS_2026 = [
+export let SPECIAL_WORKDAYS = [
   '2026-02-15', '2026-03-01', // Spring Festival adjustments
 ];
+
+export const updateHolidaysConfig = (holidays: string[], specialWorkdays: string[]) => {
+  HOLIDAYS = holidays;
+  SPECIAL_WORKDAYS = specialWorkdays;
+};
 
 /**
  * Check if a string is a valid date
@@ -36,10 +41,10 @@ export const isWorkingDay = (date: Date): boolean => {
   const day = date.getDay(); // 0 is Sunday, 6 is Saturday
 
   // If it's a special workday, return true
-  if (SPECIAL_WORKDAYS_2026.includes(dateStr)) return true;
+  if (SPECIAL_WORKDAYS.includes(dateStr)) return true;
 
   // If it's a holiday, return false
-  if (HOLIDAYS_2026.includes(dateStr)) return false;
+  if (HOLIDAYS.includes(dateStr)) return false;
 
   // Otherwise, return true if it's a weekday
   return day !== 0 && day !== 6;

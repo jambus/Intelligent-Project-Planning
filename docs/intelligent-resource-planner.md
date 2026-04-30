@@ -36,6 +36,10 @@
 *   **待排期项目 (Ready for AI)**：已填写 `devTotalMd` 或 `testTotalMd` 的项目。这类项目会参与 AI 智能排期计算，并出现在资源分配大盘中。
 *   **待评估项目 (Pending Assessment)**：尚未评估工时（MD 为 0）的项目。这类项目不参与 AI 排期，但会展示在大盘底部的独立清单中，提醒 PM 及时跟进评估。
 
+#### 1.4.4 节假日与日历可配置 (Configurable Holiday Calendar)
+*   **日历管理**：独立页面，允许用户自定义法定节假日（休息日）和调休工作日（周末上班）。
+*   **动态排期计算**：系统内置默认日历数据，修改后立即持久化到本地 IndexedDB，AI 智能排期和 `endDate` 推算将严格遵守最新的自定义日历设置。
+
 *   **项目管理 (Project Management)**：独立页面，展示所有待排期项目的详细清单（项目名、负责人、起止日期、评估工时等），并支持按优先级从高到低自动排序。
 *   **智能排期引擎 (AI Scheduler)**：纯前端组装 Prompt，支持用户配置自定义 API Base URL 和模型名称，兼容 OpenAI 协议（如 DeepSeek, Qwen, Claude 等）。
 *   **资源图谱与技能管理**：本地化的人员画像管理。
@@ -63,6 +67,7 @@ graph TD
             OptionsPage[全局仪表盘]
             ProjectMgmt[项目管理]
             ResourcesMgmt[人员管理]
+            HolidaysMgmt[节假日管理]
             SettingsPage[系统设置]
             Popup[快捷操作面板]
             ContentScript[Jira 页面 UI 注入]
@@ -132,14 +137,23 @@ graph TD
 2.  **AI 微调度 (Micro-Matching)**：废弃一次性大 Prompt，改为按项目逐个调用 AI。AI 仅针对当前单个项目的缺口和当前的闲置名单推荐最佳人选。
 3.  **强制截断执行器 (Hard Deduction)**：JS 代码在接收 AI 建议后绝不盲目信任，强制执行 `Math.min(建议人天, 项目缺口, 资源余量)`，从而 **100% 杜绝超排**，并将排期过程的透明度发挥到极致。
 
-#### 3.3.3 月度资源投入计算 (Monthly Allocated MD Calculation)
+#### 3.3.3 排期精准度与策略优化 (Scheduling Precision & Strategies)
+为提升 AI 分配的合理性与资源利用率，系统在底层引入了多项高级调度特性：
+1. **两阶段分离排期 (Two-Phase Scheduling)**：将排期严格划分为 `Dev-first` 和 `Test-second` 两个阶段。优先分配开发资源（含全栈），随后系统根据该项目所有开发任务的最早开始和最晚结束时间，动态计算出时间中点（Midpoint），以此作为测试人员的最早介入日期，彻底解决测试资源过早锁定、空等交付的问题。
+2. **多维度特征匹配 (Multi-dimensional Matching)**：CSV 导入支持读取 `techStack`（技术栈）和 `domain`（产品域）等上下文信息。AI 微调度时会执行交叉比对，优先匹配「技能标签」对口的候选人。
+3. **动态排期策略模板 (Strategy Templates)**：
+   * **专注模式 (Focused)**：默认模式，倾向于安排 100% 投入，单线程快速击穿项目。
+   * **均衡模式 (Balanced)**：引入时间切片概念，建议 50% 的投入占比，以支持资源进行多项目并行。
+   * **紧急模式 (Urgent)**：允许满负荷或超负荷加班分配，以确保最高优项目快速推进。
+
+#### 3.3.4 月度资源投入计算 (Monthly Allocated MD Calculation)
 *   **基准年份**：系统当前以 **2026 年** 为基准年份进行所有排期和计算。
 *   **最小排期单位**：系统以 **1 天 (Integer)** 为最小排期和展示单位。
 *   **取整规则**：所有排期生成的人天、月度统计及审计差值均进行四舍五入取整，不保留小数点，确保排期结果符合实际执行习惯。
 *   **工作日逻辑**：计算必须排除周末，并能够识别和扣除法定节假日（如清明节、劳动节等）。
 *   **动态计算公式**：`月度投入人天 = 该月内项目重叠的工作日天数 * 投入占比 %`。
 
-#### 3.3.4 Content Script 预警注入
+#### 3.3.5 Content Script 预警注入
 *   插件的 Content Script 会监听页面 DOM 变化（特别是 Jira 的 `[data-testid="issue.views.field.user.assignee"]` 元素）。
 *   当识别到具体的处理人姓名时，异步查询 IndexedDB 计算其当前所有进行中项目分配累加的负荷百分比。
 *   将负荷情况以不侵入原有 DOM 结构的方式，在页面右下角以红/黄/绿悬浮卡片展示预警。
