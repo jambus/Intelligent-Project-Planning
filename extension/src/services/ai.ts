@@ -7,10 +7,10 @@ export interface AISettings {
 }
 
 export const DEFAULT_SCHEDULING_PROMPT = `YOUR TASK:
-Match the best resources to fulfill the project's {{phase}} gap.
+Match the best resources to fulfill the {{phase}} gaps for a BATCH of projects.
 Rules:
-1. DO NOT assign more MDs than the project needs.
-2. DO NOT assign more MDs than a resource's "idleMd".
+1. DO NOT assign more MDs than a project needs.
+2. DO NOT assign more MDs than a resource's "idleMd" across all projects they are assigned to.
 3. Skill Matching: Prioritize resources whose "skills" match the project's Tech Stack or Domain.
 4. Phase rules:
    - If phase is 'dev', only assign Developers (前端/后端/APP/全栈).
@@ -18,8 +18,8 @@ Rules:
 5. Provide the "allocatedMd" (must be an integer >= 1) and "allocationPercentage".
 6. {{strategyInstruction}}
 
-Return ONLY a JSON Array with this exact format:
-[{"resourceId": 1, "targetGap": "{{phase}}", "allocatedMd": 5, "allocationPercentage": 100, "reason": "Skill match explanation..."}]`;
+Return ONLY a JSON Array with this exact format (do not wrap in markdown blocks, just raw JSON):
+[{"projectId": 1, "resourceId": 1, "targetGap": "{{phase}}", "allocatedMd": 5, "allocationPercentage": 100, "reason": "Skill match explanation..."}]`;
 
 export const getAISettings = async (): Promise<AISettings | null> => {
   const apiKey = await getStorageItem<string>('openAiApiKey');
@@ -60,6 +60,7 @@ const callAI = async (systemMsg: string, prompt: string, settings: AISettings) =
 };
 
 export interface AIMicroAllocation {
+  projectId?: number;
   resourceId: number;
   targetGap: 'dev' | 'test';
   allocatedMd: number;
@@ -70,10 +71,10 @@ export interface AIMicroAllocation {
 export type SchedulingStrategy = 'balanced' | 'focused' | 'urgent';
 
 /**
- * Step-by-Step Micro Scheduling: Suggest allocations for a SINGLE project and specific phase.
+ * Batch Scheduling: Suggest allocations for a BATCH of projects in a specific phase.
  */
-export const suggestAllocationForProject = async (
-  project: { id: number; name: string; gap: number; techStack?: string; domain?: string; startDate?: string; endDate?: string },
+export const suggestAllocationsForBatch = async (
+  projects: { id: number; name: string; gap: number; techStack?: string; domain?: string; startDate?: string; endDate?: string }[],
   idleResources: { id: number; name: string; role: string; idleMd: number; skills: string[] }[],
   phase: 'dev' | 'test',
   strategy: SchedulingStrategy = 'focused'
@@ -98,22 +99,19 @@ export const suggestAllocationForProject = async (
     .replace(/\{\{phase\}\}/g, phase)
     .replace(/\{\{strategyInstruction\}\}/g, strategyInstruction);
 
-  const prompt = `
-We are scheduling ONE project for the ${phase.toUpperCase()} phase. 
-Project Name: ${project.name}
-Needs: ${project.gap} MDs for ${phase}.
-Context: ${project.techStack ? 'Tech Stack: ' + project.techStack : ''} ${project.domain ? 'Domain: ' + project.domain : ''}
-Time Window: ${project.startDate || 'N/A'} to ${project.endDate || 'N/A'}
-
+  const systemMsg = `You are a strict resource allocation algorithm. You prioritize skill matching. You only output valid JSON arrays. You never over-allocate.
+  
 Candidate Resources (with remaining idle capacity & skills):
 ${JSON.stringify(idleResources)}
 
 ${resolvedPromptRules}
 `;
 
-  return await callAI(
-    "You are a strict resource allocation algorithm. You prioritize skill matching. You only output valid JSON arrays. You never over-allocate.", 
-    prompt, 
-    settings
-  );
+  const prompt = `We are scheduling a BATCH of ${projects.length} projects for the ${phase.toUpperCase()} phase.
+Projects:
+${JSON.stringify(projects)}
+
+Return ONLY a JSON Array containing allocations for ALL these projects.`;
+
+  return await callAI(systemMsg, prompt, settings);
 };

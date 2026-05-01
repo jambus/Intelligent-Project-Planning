@@ -97,3 +97,16 @@
 
 - [x] **DONE** 7.9 **全局补排轮次 (Global Refinement Round)**
     - [x] 7.9.1 在所有项目逐项扣减完成后，对仍有缺口的项目执行一轮全局补排，将碎片化闲置资源"拼接"分配，消除分配盲区。
+
+## 阶段八：AI 批量排期与 Token 优化 (Phase 8: AI Batch Scheduling & Token Optimization)
+
+- [x] **DONE** 8.1 **重构AI排期为批量调用模式 (Batch Scheduling Refactoring)**
+    - [x] 8.1.1 收集当前阶段的所有缺口项目，一次性发送给 AI。
+- [x] **DONE** 8.2 **实现 Prompt Caching 优化 token 使用 (Prompt Caching)**
+    - [x] 8.2.1 分离静态系统提示词（如资源列表、排期规则）与动态项目数据。
+- [x] **DONE** 8.3 **优化AI响应解析逻辑 (Response Parsing Optimization)**
+    - [x] 8.3.1 支持解析多项目的批量返回结果（按 projectId 区分分配建议）。
+- [x] **DONE** 8.4 **更新Dashboard UI交互逻辑 (Dashboard UI Update)**
+    - [x] 8.4.1 将逐个项目加载的动画更新为批量处理状态展示。
+- [x] **DONE** 8.5 **验证构建和功能测试 (Build & Test Verification)**
+    - [x] 8.5.1 执行 `npm run build && npm run zip`，确保逻辑正确性。

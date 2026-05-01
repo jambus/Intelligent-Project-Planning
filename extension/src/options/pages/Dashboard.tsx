@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
-import { suggestAllocationForProject, type AIMicroAllocation, type SchedulingStrategy } from '../../services/ai';
+import { suggestAllocationsForBatch, type AIMicroAllocation, type SchedulingStrategy } from '../../services/ai';
 import { Play, Users, ChevronDown, ArrowRight, ClipboardList, AlertTriangle, FileWarning, Search, TriangleAlert, User, Briefcase, RefreshCcw, CheckCircle2, Settings2 } from 'lucide-react';
 import { calculateMonthlyMD, getWorkingDays, calculateEndDate, isWorkingDay, isValidDateStr } from '../../utils/dateUtils';
 
@@ -157,150 +157,137 @@ export const Dashboard = () => {
 
       // Helper function to process a specific phase for all projects
       const processPhase = async (phase: 'dev' | 'test') => {
-        let isResourcePoolExhausted = false;
+        setScheduleStatus(`🛠️ 阶段${phase === 'dev' ? '一' : '二'}: 正在收集和评估全盘 ${phase.toUpperCase()} 资源需求...`);
+        
+        const { gaps, idle } = runAudit(readyProjects, resources, currentAllocations);
 
+        const relevantIdle = idle.filter(r => {
+             if (phase === 'dev' && !['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)) return false;
+             if (phase === 'test' && !['测试工程师'].includes(r.role)) return false;
+             if (r.idleMd <= 0) return false;
+             const globalNext = findNextAvailableDate(r.id!, currentAllocations, defaultStart);
+             return globalNext <= scheduleMaxDate;
+        });
+
+        if (relevantIdle.length === 0) {
+             console.log(`[Queue] 🛑 没有可用的 ${phase} 资源了，提前终止该阶段。`);
+             return;
+        }
+
+        const batchProjects = [];
         for (let i = 0; i < readyProjects.length; i++) {
-          if (isResourcePoolExhausted) {
-             console.log(`[Queue] 🛑 资源已全部耗尽或越界，提前终止 ${phase.toUpperCase()} 阶段后续所有项目的 AI 排班，节省 Token。`);
-             break;
-          }
-
           const project = readyProjects[i];
-          
-          setScheduleStatus(`🛠️ 阶段${phase === 'dev' ? '一' : '二'}: 正在分配 ${phase.toUpperCase()} 资源 [${i+1}/${readyProjects.length}]: ${project.name}...`);
-          
-          const { gaps, idle } = runAudit(readyProjects, resources, currentAllocations);
           const pGap = gaps.find(g => Number(g.id) === Number(project.id));
-          
           if (!pGap) continue;
           
           const gapAmount = phase === 'dev' ? pGap.devGap : pGap.testGap;
           if (gapAmount <= 0) continue;
-          
-          const relevantIdle = idle.filter(r => {
-             // Filter by role
-             if (phase === 'dev' && !['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)) return false;
-             if (phase === 'test' && !['测试工程师'].includes(r.role)) return false;
-             
-             // Check if the resource actually has idle MD left
-             if (r.idleMd <= 0) return false;
 
-             // Check if the resource's NEXT available date is already past the absolute window boundary
-             let pStartStr = isValidDateStr(project.startDate) ? project.startDate! : defaultStart;
-             if (phase === 'test') {
-                pStartStr = calculateTestStartDate(project.id!, currentAllocations, pStartStr);
-             }
+          // Check if any resource can be assigned to this project
+          let pStartStr = isValidDateStr(project.startDate) ? project.startDate! : defaultStart;
+          if (phase === 'test') {
+             pStartStr = calculateTestStartDate(project.id!, currentAllocations, pStartStr);
+          }
+          const hasAvailableResource = relevantIdle.some(r => {
              const nextAvailable = findNextAvailableDate(r.id!, currentAllocations, pStartStr);
-             if (nextAvailable > scheduleMaxDate) return false; // Exclude resources that are pushed beyond the user-selected boundary
-
-             return true;
+             return nextAvailable <= scheduleMaxDate;
           });
 
-          if (relevantIdle.length === 0) {
-             console.log(`[Queue] ⚠️ No idle ${phase} resources left within the time window for ${project.name}.`);
-             // Determine if this is a global exhaustion or just local to this project's start date
-             const anyResourceGloballyAvailable = idle.some(r => {
-                const isRoleMatch = phase === 'dev' 
-                   ? ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role) 
-                   : ['测试工程师'].includes(r.role);
-                if (!isRoleMatch || r.idleMd <= 0) return false;
-                const globalNext = findNextAvailableDate(r.id!, currentAllocations, defaultStart);
-                return globalNext <= scheduleMaxDate;
-             });
-
-             if (!anyResourceGloballyAvailable) {
-                isResourcePoolExhausted = true; // Global flag to break the entire phase loop
-                break; 
-             }
-             continue; // Skip this specific project but keep checking others
-          }
-
-          console.log(`[Queue] Processing ${phase.toUpperCase()}: ${project.name} | Gap: ${gapAmount}`);
-          
-          let suggestions: AIMicroAllocation[] = [];
-          try {
-             suggestions = await suggestAllocationForProject({
-               id: project.id!,
-               name: project.name,
-               gap: gapAmount,
-               techStack: (project as any).techStack || '',
-               domain: (project as any).domain || '',
-               startDate: project.startDate,
-               endDate: project.endDate
-             }, relevantIdle, phase, strategy);
-             console.log(`[AI Response] ${phase} Suggestions for ${project.name}:`, suggestions);
-          } catch(e) {
-             console.warn(`[AI Error] Failed to get ${phase} suggestion for ${project.name}`, e);
+          if (!hasAvailableResource) {
+             console.log(`[Queue] ⚠️ 项目 ${project.name} 的可排期时间超出了物理边界，跳过 AI 请求。`);
              continue;
           }
-
-          let savedCount = 0;
-          for (const sug of suggestions) {
-             const resource = resources.find(r => Number(r.id) === Number(sug.resourceId));
-             if (!resource) continue;
-
-             const { gaps: currentGaps, idle: currentIdle } = runAudit(readyProjects, resources, currentAllocations);
-             const currentPGap = currentGaps.find(g => Number(g.id) === Number(project.id));
-             const currentRIdle = currentIdle.find(r => Number(r.id) === Number(resource.id));
-             
-             if (!currentPGap || !currentRIdle) continue;
-
-             const targetGapAmount = phase === 'dev' ? currentPGap.devGap : currentPGap.testGap;
-             
-             const finalMd = Math.min(
-               Math.max(1, Math.round(sug.allocatedMd)), 
-               targetGapAmount,                          
-               currentRIdle.idleMd                       
-             );
-
-             if (finalMd >= 1) {
-                // For dev phase, use project start or default. For test phase, use dev midpoint.
-                let pStartStr = isValidDateStr(project.startDate) ? project.startDate! : defaultStart;
-                if (phase === 'test') {
-                   pStartStr = calculateTestStartDate(project.id!, currentAllocations, pStartStr);
-                }
-                
-                const startDate = findNextAvailableDate(resource.id!, currentAllocations, pStartStr);
-                
-                // Calculate absolute schedule boundary (last day of endMonth)
-                const lastDay = new Date(selectedYear, endMonth, 0).getDate();
-                const scheduleMaxDate = `${selectedYear}-${String(endMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-                
-                if (startDate > scheduleMaxDate) {
-                   console.log(`[Hard Deduction] ⚠️ Rejected allocation for ${resource.name}. StartDate ${startDate} exceeds schedule window ${scheduleMaxDate}.`);
-                   continue;
-                }
-
-                const allocationPercentage = sug.allocationPercentage || 100;
-                let endDate = calculateEndDate(startDate, finalMd, allocationPercentage);
-                
-                if (endDate > scheduleMaxDate) {
-                   console.log(`[Hard Deduction] ⚠️ Truncated endDate for ${resource.name} from ${endDate} to window limit ${scheduleMaxDate}.`);
-                   endDate = scheduleMaxDate;
-                }
-
-                const newAlloc = {
-                  resourceId: resource.id!,
-                  projectId: project.id!,
-                  allocationPercentage: allocationPercentage,
-                  startDate: startDate,
-                  endDate: endDate,
-                  allocationType: phase // saving phase type to db (requires schema update or it just saves adhoc)
-                };
-
-                currentAllocations.push(newAlloc);
-                await db.allocations.add(newAlloc as any);
-                savedCount++;
-                
-                console.log(`[Hard Deduction] ✅ Assigned ${resource.name} (${phase}) to ${project.name} | MD: ${finalMd} | Range: ${startDate} to ${endDate}`);
-             } else {
-                console.log(`[Hard Deduction] ⚠️ Rejected allocation for ${resource.name}. Suggested MD: ${sug.allocatedMd}, Cap: ${finalMd}`);
-             }
-          }
           
-          if (savedCount > 0) {
-              await new Promise(resolve => setTimeout(resolve, 300));
-          }
+          batchProjects.push({
+            id: project.id!,
+            name: project.name,
+            gap: gapAmount,
+            techStack: (project as any).techStack || '',
+            domain: (project as any).domain || '',
+            startDate: project.startDate,
+            endDate: project.endDate
+          });
+        }
+
+        if (batchProjects.length === 0) {
+          console.log(`[Queue] 没有需要排期的 ${phase} 项目或都已越界。`);
+          return;
+        }
+
+        setScheduleStatus(`🛠️ 阶段${phase === 'dev' ? '一' : '二'}: 正在批量向 AI 请求分配 ${batchProjects.length} 个项目 (节省 Token)...`);
+        console.log(`[Batch] Sending ${batchProjects.length} projects to AI for ${phase.toUpperCase()}`);
+
+        let suggestions: AIMicroAllocation[] = [];
+        try {
+           suggestions = await suggestAllocationsForBatch(batchProjects, relevantIdle, phase, strategy);
+           console.log(`[AI Batch Response] ${phase}:`, suggestions);
+        } catch(e) {
+           console.warn(`[AI Error] Failed batch suggestion for ${phase}`, e);
+           return;
+        }
+
+        let savedCount = 0;
+        for (const sug of suggestions) {
+           const project = readyProjects.find(p => Number(p.id) === Number(sug.projectId));
+           const resource = resources.find(r => Number(r.id) === Number(sug.resourceId));
+           if (!project || !resource) continue;
+
+           const { gaps: currentGaps, idle: currentIdle } = runAudit(readyProjects, resources, currentAllocations);
+           const currentPGap = currentGaps.find(g => Number(g.id) === Number(project.id));
+           const currentRIdle = currentIdle.find(r => Number(r.id) === Number(resource.id));
+           
+           if (!currentPGap || !currentRIdle) continue;
+
+           const targetGapAmount = phase === 'dev' ? currentPGap.devGap : currentPGap.testGap;
+           
+           const finalMd = Math.min(
+             Math.max(1, Math.round(sug.allocatedMd)), 
+             targetGapAmount,                          
+             currentRIdle.idleMd                       
+           );
+
+           if (finalMd >= 1) {
+              let pStartStr = isValidDateStr(project.startDate) ? project.startDate! : defaultStart;
+              if (phase === 'test') {
+                 pStartStr = calculateTestStartDate(project.id!, currentAllocations, pStartStr);
+              }
+              
+              const startDate = findNextAvailableDate(resource.id!, currentAllocations, pStartStr);
+              
+              if (startDate > scheduleMaxDate) {
+                 console.log(`[Hard Deduction] ⚠️ Rejected allocation for ${resource.name}. StartDate ${startDate} exceeds schedule window ${scheduleMaxDate}.`);
+                 continue;
+              }
+
+              const allocationPercentage = sug.allocationPercentage || 100;
+              let endDate = calculateEndDate(startDate, finalMd, allocationPercentage);
+              
+              if (endDate > scheduleMaxDate) {
+                 console.log(`[Hard Deduction] ⚠️ Truncated endDate for ${resource.name} from ${endDate} to window limit ${scheduleMaxDate}.`);
+                 endDate = scheduleMaxDate;
+              }
+
+              const newAlloc = {
+                resourceId: resource.id!,
+                projectId: project.id!,
+                allocationPercentage: allocationPercentage,
+                startDate: startDate,
+                endDate: endDate,
+                allocationType: phase // saving phase type to db (requires schema update or it just saves adhoc)
+              };
+
+              currentAllocations.push(newAlloc);
+              await db.allocations.add(newAlloc as any);
+              savedCount++;
+              
+              console.log(`[Hard Deduction] ✅ Assigned ${resource.name} (${phase}) to ${project.name} | MD: ${finalMd} | Range: ${startDate} to ${endDate}`);
+           } else {
+              console.log(`[Hard Deduction] ⚠️ Rejected allocation for ${resource.name}. Suggested MD: ${sug.allocatedMd}, Cap: ${finalMd}`);
+           }
+        }
+        
+        if (savedCount > 0) {
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
       };
 

@@ -109,35 +109,30 @@ graph TD
 *   **优先级逻辑**：系统严格遵循「从上到下」的物理顺序规则。文件导入时，排在顶部的项目具有最高优先级。
 *   **展示与排期一致性**：无论是「项目管理」页面的列表展示，还是「全局排期大盘」的 AI 自动排期，都统一使用数据库自增 ID 作为顺序基准，确保 UI 显示顺序、业务优先级顺序与 AI 逻辑完全对齐。
 
-#### 3.3.2 步进式扣减排期架构 (Step-by-Step Deduction Scheduling)
-为了解决 AI “盲排” 容易产生的漏排、超排和算术幻觉问题，系统采用「代码主导状态，AI 辅助决策 (Code-Driven Orchestration)」的新一代迭代架构：
+#### 3.3.2 全局批量排期架构与 Prompt Caching (Global Batch Scheduling & Prompt Caching)
+为了解决 AI 逐个处理产生的「Token 浪费严重」以及「上下文割裂导致的次优解」问题，系统现已全面升级为全局批量调度架构，并深度整合了大模型的 Prompt Caching 机制：
 
 ```mermaid
 graph TD
     Start([点击一键排期]) --> Init[重置 Allocations 表<br/>建立资源池与需求池]
-    Init --> LoopStart{需求池是否为空<br/>或资源耗尽?}
+    Init --> Collect[收集当前阶段所有缺口项目<br/>与空闲资源]
+    Collect --> Check{资源是否耗尽<br/>或越过物理边界?}
     
-    LoopStart -- 是 --> End([完成排期])
+    Check -- 是 --> End([完成本阶段排期])
     
-    LoopStart -- 否 --> PopProject[出列: 获取优先级最高的项目 A]
-    PopProject --> Audit[<b>自动化硬审计</b><br/>精确计算 A 剩余的 Dev/Test 缺口<br/>精确计算各人员剩余闲置人天]
+    Check -- 否 --> BatchAI[<b>AI 批量调度 (Batch Micro-Matching)</b><br/>应用 Prompt Caching 降低 Token 损耗<br/>AI 返回多项目的分配 JSON 阵列]
     
-    Audit --> CheckGap{项目 A 是否仍有缺口?}
-    CheckGap -- 否 --> LoopStart
-    
-    CheckGap -- 是 --> AIMatch[<b>AI 微调度</b><br/>仅将 A 的缺口与闲置人员发给 AI<br/>AI 返回分配建议 (人天与比例)]
-    
-    AIMatch --> HardDeduction[<b>JS 强制截断与扣减</b><br/>实际分配人天 = Math.min(AI建议, 项目缺口, 人员余量)]
+    BatchAI --> HardDeduction[<b>JS 强制截断与扣减</b><br/>遍历返回结果，实际分配人天 = Math.min(AI建议, 项目缺口, 人员余量)]
     HardDeduction --> CalculateDates[基于项目与人员情况计算真实起止日期]
     CalculateDates --> Save[持久化至 IndexedDB 并触发 UI 更新]
     
-    Save --> LoopStart
-    End --> Refresh[更新仪表盘大盘展示]
+    Save --> End
 ```
 
 1.  **资源池与需求池 (State Management)**：在前端实时维护各资源的空闲时间（Idle MD）和各项目的剩余缺口（Gaps）。
-2.  **AI 微调度 (Micro-Matching)**：废弃一次性大 Prompt，改为按项目逐个调用 AI。AI 仅针对当前单个项目的缺口和当前的闲置名单推荐最佳人选。
-3.  **强制截断执行器 (Hard Deduction)**：JS 代码在接收 AI 建议后绝不盲目信任，强制执行 `Math.min(建议人天, 项目缺口, 资源余量)`，从而 **100% 杜绝超排**，并将排期过程的透明度发挥到极致。
+2.  **全局批量调度 (Batch Micro-Matching)**：废弃“逐个项目发送请求”的低效模式。系统收集当前排期阶段（Dev/Test）内所有的待排缺口项目，将其作为 JSON 阵列一次性发送给 AI。AI 因此获得了完整的全局视野，避免了“先到先得”的局部次优解。
+3.  **Prompt Caching 优化**：将静态的排班标准规则、人员画像与可用闲置天数等置于 `System Prompt` 中，利用大语言模型（如 Claude/OpenAI）内置的缓存机制，后续同批次请求的重复输入无需再次支付 Token 费用，成本节省达 90% 以上。
+4.  **强制截断执行器 (Hard Deduction)**：JS 代码在接收 AI 建议后绝不盲目信任，强制执行 `Math.min(建议人天, 项目缺口, 资源余量)`，从而 **100% 杜绝超排**，并将排期过程的透明度发挥到极致。
 
 #### 3.3.3 排期精准度与策略优化 (Scheduling Precision & Strategies)
 为提升 AI 分配的合理性与资源利用率，系统在底层引入了多项高级调度特性：
