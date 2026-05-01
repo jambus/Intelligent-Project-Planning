@@ -151,10 +151,20 @@ export const Dashboard = () => {
       
       let currentAllocations: any[] = [];
       const defaultStart = `${selectedYear}-${String(startMonth).padStart(2, '0')}-01`;
+      
+      const lastDay = new Date(selectedYear, endMonth, 0).getDate();
+      const scheduleMaxDate = `${selectedYear}-${String(endMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
       // Helper function to process a specific phase for all projects
       const processPhase = async (phase: 'dev' | 'test') => {
+        let isResourcePoolExhausted = false;
+
         for (let i = 0; i < readyProjects.length; i++) {
+          if (isResourcePoolExhausted) {
+             console.log(`[Queue] 🛑 资源已全部耗尽或越界，提前终止 ${phase.toUpperCase()} 阶段后续所有项目的 AI 排班，节省 Token。`);
+             break;
+          }
+
           const project = readyProjects[i];
           
           setScheduleStatus(`🛠️ 阶段${phase === 'dev' ? '一' : '二'}: 正在分配 ${phase.toUpperCase()} 资源 [${i+1}/${readyProjects.length}]: ${project.name}...`);
@@ -168,13 +178,41 @@ export const Dashboard = () => {
           if (gapAmount <= 0) continue;
           
           const relevantIdle = idle.filter(r => {
-             if (phase === 'dev') return ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role);
-             return ['测试工程师'].includes(r.role);
+             // Filter by role
+             if (phase === 'dev' && !['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)) return false;
+             if (phase === 'test' && !['测试工程师'].includes(r.role)) return false;
+             
+             // Check if the resource actually has idle MD left
+             if (r.idleMd <= 0) return false;
+
+             // Check if the resource's NEXT available date is already past the absolute window boundary
+             let pStartStr = isValidDateStr(project.startDate) ? project.startDate! : defaultStart;
+             if (phase === 'test') {
+                pStartStr = calculateTestStartDate(project.id!, currentAllocations, pStartStr);
+             }
+             const nextAvailable = findNextAvailableDate(r.id!, currentAllocations, pStartStr);
+             if (nextAvailable > scheduleMaxDate) return false; // Exclude resources that are pushed beyond the user-selected boundary
+
+             return true;
           });
 
           if (relevantIdle.length === 0) {
-             console.log(`[Queue] No idle ${phase} resources left. Stopping for ${project.name}.`);
-             continue;
+             console.log(`[Queue] ⚠️ No idle ${phase} resources left within the time window for ${project.name}.`);
+             // Determine if this is a global exhaustion or just local to this project's start date
+             const anyResourceGloballyAvailable = idle.some(r => {
+                const isRoleMatch = phase === 'dev' 
+                   ? ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role) 
+                   : ['测试工程师'].includes(r.role);
+                if (!isRoleMatch || r.idleMd <= 0) return false;
+                const globalNext = findNextAvailableDate(r.id!, currentAllocations, defaultStart);
+                return globalNext <= scheduleMaxDate;
+             });
+
+             if (!anyResourceGloballyAvailable) {
+                isResourcePoolExhausted = true; // Global flag to break the entire phase loop
+                break; 
+             }
+             continue; // Skip this specific project but keep checking others
           }
 
           console.log(`[Queue] Processing ${phase.toUpperCase()}: ${project.name} | Gap: ${gapAmount}`);

@@ -14,7 +14,7 @@ Rules:
 3. Skill Matching: Prioritize resources whose "skills" match the project's Tech Stack or Domain.
 4. Phase rules:
    - If phase is 'dev', only assign Developers (前端/后端/APP/全栈).
-   - If phase is 'test', only assign Testers (测试工程师).
+   - If phase is 'test', only assign Testers (测试工程师). Ensure testing effort follows development effort.
 5. Provide the "allocatedMd" (must be an integer >= 1) and "allocationPercentage".
 6. {{strategyInstruction}}
 
