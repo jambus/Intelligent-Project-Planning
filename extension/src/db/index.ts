@@ -23,6 +23,10 @@ export interface Project {
   jiraEpicKey: string; // Jira Epic Key
   devTotalMd: number; // Dev Total MD (开发评估总天数)
   testTotalMd: number; // Test Total MD (测试评估总天数)
+  projectTechLead?: string; // Project Tech Lead
+  projectQualityLead?: string; // Project Quality Lead
+  detailsProductDevMd?: string; // Details Product DEV MD
+  detailsProductTestMd?: string; // Details Product Test MD
   techStack?: string; // Technical Stack required
   domain?: string; // Product Domain
 }

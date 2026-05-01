@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
-import { FolderKanban, Info, UploadCloud } from 'lucide-react';
+import { FolderKanban, Info, UploadCloud, Download } from 'lucide-react';
 import { importProjectsFromFile } from '../../services/fileImport';
 
 const priorityWeight: Record<string, number> = {
@@ -62,6 +62,15 @@ export const Projects = () => {
         </div>
         <div className="flex flex-col items-end space-y-2">
           <div className="flex items-center space-x-3">
+            <a
+              href="/sample_projects.csv"
+              download="irp_sample_projects.csv"
+              className="flex items-center space-x-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 px-4 py-2 rounded-lg transition-colors shadow-sm"
+              title="下载带有标准表头的模板文件"
+            >
+              <Download size={18} />
+              <span>下载模板 (CSV)</span>
+            </a>
             <input 
               type="file" 
               accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
@@ -99,9 +108,9 @@ export const Projects = () => {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-xs uppercase tracking-wider">
                 <th className="p-4 font-semibold w-16">顺序</th>
-                <th className="p-4 font-semibold">项目名称 / Epic</th>
-                <th className="p-4 font-semibold">优先级标签</th>
-                <th className="p-4 font-semibold">负责人</th>
+                <th className="p-4 font-semibold min-w-[200px]">项目名称 / Epic</th>
+                <th className="p-4 font-semibold">优先级</th>
+                <th className="p-4 font-semibold">负责人 (DR/Tech/QA)</th>
                 <th className="p-4 font-semibold">业务方</th>
                 <th className="p-4 font-semibold">状态</th>
                 <th className="p-4 font-semibold text-center">开发人天</th>
@@ -126,9 +135,11 @@ export const Projects = () => {
                   <td className="p-4">
                     <div className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{p.name}</div>
                     <div className="flex items-center space-x-2 mt-1">
-                      {p.jiraEpicKey && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{p.jiraEpicKey}</span>}
-                      {p.comments && <div className="text-xs text-gray-400 truncate max-w-[150px]">{p.comments}</div>}
+                      {p.jiraEpicKey && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono" title="Jira Epic">{p.jiraEpicKey}</span>}
+                      {p.techStack && <span className="text-[10px] bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded font-medium" title="Tech Stack">{p.techStack}</span>}
+                      {p.domain && <span className="text-[10px] bg-teal-50 text-teal-500 px-1.5 py-0.5 rounded font-medium" title="Domain">{p.domain}</span>}
                     </div>
+                    {p.comments && <div className="text-xs text-gray-400 mt-1 truncate max-w-[200px]" title={p.comments}>{p.comments}</div>}
                   </td>
                   <td className="p-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
@@ -141,7 +152,14 @@ export const Projects = () => {
                       {p.priority}
                     </span>
                   </td>
-                  <td className="p-4 text-sm text-gray-600 font-medium">{p.digitalResponsible || '-'}</td>
+                  <td className="p-4">
+                    <div className="flex flex-col space-y-0.5 text-xs text-gray-600">
+                      {p.digitalResponsible && <div><span className="text-gray-400">DR:</span> <span className="font-medium">{p.digitalResponsible}</span></div>}
+                      {p.projectTechLead && <div><span className="text-gray-400">Tech:</span> {p.projectTechLead}</div>}
+                      {p.projectQualityLead && <div><span className="text-gray-400">QA:</span> {p.projectQualityLead}</div>}
+                      {!p.digitalResponsible && !p.projectTechLead && !p.projectQualityLead && <span className="text-gray-300">-</span>}
+                    </div>
+                  </td>
                   <td className="p-4 text-sm text-gray-500">{p.businessOwner || '-'}</td>
                   <td className="p-4 text-sm">
                     <span className="px-2 py-0.5 border border-gray-200 rounded text-gray-500 bg-gray-50 uppercase text-[10px] font-bold">
@@ -149,14 +167,20 @@ export const Projects = () => {
                     </span>
                   </td>
                   <td className="p-4 text-center">
-                    <span className="text-sm font-mono font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
-                      {p.devTotalMd}d
-                    </span>
+                    <div className="flex flex-col items-center" title={p.detailsProductDevMd || 'No details'}>
+                      <span className="text-sm font-mono font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
+                        {p.devTotalMd}d
+                      </span>
+                      {p.detailsProductDevMd && <span className="text-[9px] text-gray-400 mt-1 max-w-[100px] truncate">{p.detailsProductDevMd}</span>}
+                    </div>
                   </td>
                   <td className="p-4 text-center">
-                    <span className="text-sm font-mono font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded">
-                      {p.testTotalMd}d
-                    </span>
+                    <div className="flex flex-col items-center" title={p.detailsProductTestMd || 'No details'}>
+                      <span className="text-sm font-mono font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded">
+                        {p.testTotalMd}d
+                      </span>
+                      {p.detailsProductTestMd && <span className="text-[9px] text-gray-400 mt-1 max-w-[100px] truncate">{p.detailsProductTestMd}</span>}
+                    </div>
                   </td>
                   <td className="p-4 text-xs text-gray-400 whitespace-nowrap">
                     {p.estimatedGoLiveTime && <div className="text-blue-600 font-semibold mb-1">Go-live: {p.estimatedGoLiveTime}</div>}

@@ -107,3 +107,29 @@ Agent powering down. Goodbye!                                                   
 │  gemini-3.1-pro-preview            77    10,245,284     9,463,835        17,521                                                                                                                          │
 │    ↳ main                          77    10,245,284     9,463,835        17,521                                                                                                                          │
 │  To resume this session: gemini --resume 5dd76895-824d-4a92-9748-90a4bbd02878   
+
+
+Interaction Summary                                                                                                                                                                                     │
+│  Session ID:                 5dd76895-824d-4a92-9748-90a4bbd02878                                                                                                                                        │
+│  Tool Calls:                 59 ( ✓ 58 x 1 )                                                                                                                                                             │
+│  Success Rate:               98.3%                                                                                                                                                                       │
+│  User Agreement:             100.0% (59 reviewed)                                                                                                                                                        │
+│  Code Changes:               +497 -162                                                                                                                                                                   │
+│                                                                                                                                                                                                          │
+│  Performance                                                                                                                                                                                             │
+│  Wall Time:                  38h 13m 24s                                                                                                                                                                 │
+│  Agent Active:               18m 1s                                                                                                                                                                      │
+│    » API Time:               14m 46s (82.0%)                                                                                                                                                             │
+│    » Tool Time:              3m 14s (18.0%)                                                                                                                                                              │
+│                                                                                                                                                                                                          │
+│                                                                                                                                                                                                          │
+│  Model Usage                                                                                                                                                                                             │
+│  Use /model to view model quota information                                                                                                                                                              │
+│                                                                                                                                                                                                          │
+│  Model                           Reqs  Input Tokens   Cache Reads Output Tokens                                                                                                                          │
+│  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  │
+│  gemini-3.1-pro-preview            61    20,136,659    17,701,083        23,862                                                                                                                          │
+│    ↳ main                          61    20,136,659    17,701,083        23,862                                                                                                                          │
+│  gemini-3-flash-preview             1        13,541             0           118                                                                                                                          │
+│    ↳ utility_loop_detector          1        13,541             0           118                                                                                                                          │
+│  To resume this session: gemini --resume 5dd76895-824d-4a92-9748-90a4bbd02878     

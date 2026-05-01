@@ -37,11 +37,15 @@ export const importProjectsFromFile = async (file: File): Promise<number> => {
         const idxDigitalResponsible = findColumnIndex(headers, ['digital responsible', '研发负责', '负责人']);
         const idxStartDate = findColumnIndex(headers, ['start in', '开始时间', 'start date']);
         const idxEndDate = findColumnIndex(headers, ['end in', '结束时间', 'end date']);
-        const idxGoLive = findColumnIndex(headers, ['go-live', 'go live', '上线时间']);
+        const idxGoLive = findColumnIndex(headers, ['go-live', 'go live', 'estimated go-live time', '上线时间']);
         const idxComments = findColumnIndex(headers, ['comments', '备注', '说明']);
         const idxJiraKey = findColumnIndex(headers, ['jira epic key', 'jira key', 'jira']);
-        const idxDevMd = findColumnIndex(headers, ['dev total md', '开发人天', '开发预估']);
-        const idxTestMd = findColumnIndex(headers, ['test total md', '测试人天', '测试预估']);
+        const idxTechLead = findColumnIndex(headers, ['project tech lead', 'tech lead', '技术负责']);
+        const idxQualityLead = findColumnIndex(headers, ['project quality lead', 'quality lead', '质量负责', '测试负责']);
+        const idxDevMd = findColumnIndex(headers, ['total dev md', 'dev total md', '开发人天', '开发预估']);
+        const idxTestMd = findColumnIndex(headers, ['total test md', 'test total md', '测试人天', '测试预估']);
+        const idxDetailsDevMd = findColumnIndex(headers, ['details product dev md', 'details dev md']);
+        const idxDetailsTestMd = findColumnIndex(headers, ['details product test md', 'details test md']);
         const idxTechStack = findColumnIndex(headers, ['tech stack', '技术栈']);
         const idxDomain = findColumnIndex(headers, ['domain', '产品域', '业务域']);
 
@@ -57,8 +61,12 @@ export const importProjectsFromFile = async (file: File): Promise<number> => {
             estimatedGoLiveTime: idxGoLive !== -1 ? row[idxGoLive]?.toString() || '' : '',
             comments: idxComments !== -1 ? row[idxComments]?.toString() || '' : '',
             jiraEpicKey: idxJiraKey !== -1 ? row[idxJiraKey]?.toString() || '' : '',
+            projectTechLead: idxTechLead !== -1 ? row[idxTechLead]?.toString() || '' : '',
+            projectQualityLead: idxQualityLead !== -1 ? row[idxQualityLead]?.toString() || '' : '',
             devTotalMd: idxDevMd !== -1 ? Number(row[idxDevMd]) || 0 : 0,
             testTotalMd: idxTestMd !== -1 ? Number(row[idxTestMd]) || 0 : 0,
+            detailsProductDevMd: idxDetailsDevMd !== -1 ? row[idxDetailsDevMd]?.toString() || '' : '',
+            detailsProductTestMd: idxDetailsTestMd !== -1 ? row[idxDetailsTestMd]?.toString() || '' : '',
             techStack: idxTechStack !== -1 ? row[idxTechStack]?.toString() || '' : '',
             domain: idxDomain !== -1 ? row[idxDomain]?.toString() || '' : '',
           };
