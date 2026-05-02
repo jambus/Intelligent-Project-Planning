@@ -138,6 +138,50 @@ export const Dashboard = () => {
     return { readyProjects: ready, pendingProjects: pending, projectGaps: gaps, resourceIdle: idle };
   }, [projects, resources, allocations, selectedYear, startMonth, endMonth]);
 
+  const scheduledProjectsList = useMemo(() => {
+    if (!projects || !allocations || !resources) return [];
+    
+    return projects.filter(p => {
+      const pAllocs = allocations.filter(a => Number(a.projectId) === Number(p.id));
+      if (pAllocs.length === 0) return false;
+      
+      const hasDevReq = p.devTotalMd > 0;
+      const hasTestReq = p.testTotalMd > 0;
+      
+      const hasDevAlloc = pAllocs.some(a => {
+        const res = resources.find(r => Number(r.id) === Number(a.resourceId));
+        return a.allocationType === 'dev' || (res && ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(res.role));
+      });
+      const hasTestAlloc = pAllocs.some(a => {
+        const res = resources.find(r => Number(r.id) === Number(a.resourceId));
+        return a.allocationType === 'test' || (res && res.role === '测试工程师');
+      });
+      
+      if (hasDevReq && hasTestReq) return hasDevAlloc && hasTestAlloc;
+      if (hasDevReq) return hasDevAlloc;
+      if (hasTestReq) return hasTestAlloc;
+      return false;
+    }).map(p => {
+      const pAllocs = allocations.filter(a => Number(a.projectId) === Number(p.id));
+      const devs = Array.from(new Set(pAllocs.filter(a => {
+        const res = resources.find(r => Number(r.id) === Number(a.resourceId));
+        return a.allocationType === 'dev' || (res && ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(res.role));
+      }).map(a => resources.find(r => r.id === a.resourceId)?.name))).filter(Boolean);
+      
+      const testers = Array.from(new Set(pAllocs.filter(a => {
+        const res = resources.find(r => Number(r.id) === Number(a.resourceId));
+        return a.allocationType === 'test' || (res && res.role === '测试工程师');
+      }).map(a => resources.find(r => r.id === a.resourceId)?.name))).filter(Boolean);
+      
+      return {
+        ...p,
+        assignedDevs: devs.join(', '),
+        assignedTesters: testers.join(', '),
+        allPersonnel: [...new Set([...devs, ...testers])].join(', ')
+      };
+    });
+  }, [projects, allocations, resources]);
+
   const findEarliestFitDate = (resourceId: number, currentAllocations: any[], defaultStartDate: string, percentage: number) => {
     const res = resources?.find(r => Number(r.id) === Number(resourceId));
     if (!res) return "9999-12-31";
@@ -433,6 +477,50 @@ export const Dashboard = () => {
             <Users size={16} className={resourceIdle.length ? 'text-indigo-500' : 'text-gray-300'} />
           </div>
           <p className={`text-2xl font-black ${resourceIdle.length ? 'text-indigo-600' : 'text-gray-900'}`}>{resourceIdle.length}</p>
+        </div>
+      </div>
+
+      {/* Scheduled Projects Box */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 bg-blue-50/20 flex justify-between items-center">
+          <h3 className="font-bold text-gray-900 text-sm flex items-center space-x-2">
+            <CheckCircle2 size={16} className="text-green-500" />
+            <span>已排项目 (共 {scheduledProjectsList.length} 个)</span>
+          </h3>
+        </div>
+        <div className="p-0 overflow-x-auto">
+          {scheduledProjectsList.length === 0 ? (
+            <p className="text-gray-400 text-center py-8 text-xs italic">当前暂无完整排期的项目</p>
+          ) : (
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-gray-200 text-gray-400 font-black uppercase tracking-widest bg-gray-50/10">
+                  <th className="p-4">项目名称</th>
+                  <th className="p-4">开发负责人</th>
+                  <th className="p-4">测试负责人</th>
+                  <th className="p-4">所有参与人员</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scheduledProjectsList.map((p: any) => (
+                  <tr key={p.id} className="border-b border-gray-100 hover:bg-green-50/10 transition-colors">
+                    <td className="p-4 font-black text-gray-900">{p.name}</td>
+                    <td className="p-4 text-gray-600 font-medium">{p.projectTechLead || '-'}</td>
+                    <td className="p-4 text-gray-600 font-medium">{p.projectQualityLead || '-'}</td>
+                    <td className="p-4">
+                      <div className="flex flex-wrap gap-1">
+                        {p.allPersonnel.split(', ').map((name: string) => (
+                          <span key={name} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold">
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
