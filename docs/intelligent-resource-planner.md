@@ -48,8 +48,8 @@
 *   **智能排期引擎 (AI Scheduler)**：纯前端组装 Prompt，支持用户配置自定义 API Base URL 和模型名称，兼容 OpenAI 协议（如 DeepSeek, Qwen, Claude 等）。
 *   **资源图谱与技能管理**：本地化的人员画像管理。
 *   **技能标签管理 (Skills Management)**：独立页面，管理团队的「业务领域能力」与「技术能力」标签。
-    *   **业务领域**：如 OMS, Stock, Fulfillment, POS 等。
-    *   **技术技能**：如 AI Coding, Automation Test 等。
+    *   **业务领域**：如 Order, Stock, Fulfillment, Transaction, Checkout & Payment, POS 等。
+    *   **技术技能**：如 AI Coding, Automation Test, Big Data, Data Quality, App 等。
     *   支持标签的 CRUD 操作，为 AI 智能匹配提供标准化的维度。
 *   **本地文件导入 (CSV/XLSX Import)**：支持通过手动上传 CSV 或 Excel 批量导入项目，系统会自动执行全量覆盖更新。
 *   **Jira 预警机制 (Alerts)**：对资源超量分配进行红绿灯预警，并在 Jira 原生 Issue 页面中悬浮展示。

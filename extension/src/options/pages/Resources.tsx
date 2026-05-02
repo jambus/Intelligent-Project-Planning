@@ -7,6 +7,7 @@ import { importResourcesFromFile } from '../../services/fileImport';
 
 export const Resources = () => {
   const resources = useLiveQuery(() => db.resources.toArray());
+  const allSkills = useLiveQuery(() => db.skills.toArray());
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [showModal, setShowModal] = useState(false);
@@ -14,24 +15,28 @@ export const Resources = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importSuccess, setImportImportSuccess] = useState(false);
   
-  const [formData, setFormData] = useState({ 
+  const [formData, setFormData] = useState<{
+    name: string;
+    role: string;
+    capacity: number;
+    skills: string[];
+  }>({ 
     name: '', 
     role: '前端工程师', 
     capacity: 100, 
-    skills: '' 
+    skills: [] 
   });
 
   const roles = [
     '前端工程师',
     '后端工程师',
     '全栈工程师',
-    'APP工程师',
     '测试工程师'
   ];
 
   const handleOpenAdd = () => {
     setEditingId(null);
-    setFormData({ name: '', role: '前端工程师', capacity: 100, skills: '' });
+    setFormData({ name: '', role: '前端工程师', capacity: 100, skills: [] });
     setShowModal(true);
   };
 
@@ -41,9 +46,20 @@ export const Resources = () => {
       name: r.name, 
       role: r.role, 
       capacity: r.capacity, 
-      skills: r.skills.join(', ') 
+      skills: r.skills || [] 
     });
     setShowModal(true);
+  };
+
+  const toggleSkill = (skillName: string) => {
+    setFormData(prev => {
+      const current = prev.skills || [];
+      if (current.includes(skillName)) {
+        return { ...prev, skills: current.filter(s => s !== skillName) };
+      } else {
+        return { ...prev, skills: [...current, skillName] };
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,7 +68,7 @@ export const Resources = () => {
       name: formData.name,
       role: formData.role,
       capacity: Number(formData.capacity),
-      skills: formData.skills.split(',').map(s => s.trim()).filter(Boolean)
+      skills: formData.skills
     };
 
     if (editingId) {
@@ -283,14 +299,53 @@ export const Resources = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">核心技能 (逗号分隔)</label>
-                <textarea 
-                  placeholder="React, Vue, Node.js..." 
-                  rows={3}
-                  value={formData.skills} 
-                  onChange={e => setFormData({...formData, skills: e.target.value})} 
-                  className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium resize-none" 
-                />
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">核心能力标签</label>
+                <div className="space-y-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                  {/* Business Skills */}
+                  <div>
+                    <span className="text-[9px] font-bold text-orange-400 uppercase tracking-tighter mb-2 block">业务领域</span>
+                    <div className="flex flex-wrap gap-2">
+                      {allSkills?.filter(s => s.type === 'business').map(skill => (
+                        <button
+                          key={skill.id}
+                          type="button"
+                          onClick={() => toggleSkill(skill.name)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                            formData.skills.includes(skill.name)
+                              ? 'bg-orange-500 text-white border-orange-500 shadow-sm shadow-orange-100'
+                              : 'bg-white text-gray-500 border-gray-200 hover:border-orange-200'
+                          }`}
+                        >
+                          {skill.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Technical Skills */}
+                  <div>
+                    <span className="text-[9px] font-bold text-blue-400 uppercase tracking-tighter mb-2 block">技术能力</span>
+                    <div className="flex flex-wrap gap-2">
+                      {allSkills?.filter(s => s.type === 'technical').map(skill => (
+                        <button
+                          key={skill.id}
+                          type="button"
+                          onClick={() => toggleSkill(skill.name)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                            formData.skills.includes(skill.name)
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-100'
+                              : 'bg-white text-gray-500 border-gray-200 hover:border-blue-200'
+                          }`}
+                        >
+                          {skill.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                {allSkills?.length === 0 && (
+                  <p className="text-[10px] text-gray-400 italic mt-2">请先前往“技能管理”页面维护标签</p>
+                )}
               </div>
 
               <div className="pt-4 flex space-x-3">

@@ -15,12 +15,12 @@ export const Skills = () => {
       const count = await db.skills.count();
       if (count === 0) {
         const businessSkills = [
-          'OMS', 'Stock', 'Fulfillment', 'Finance', 'Checkout', 
-          'Product Offer', 'In-Store Operation', 'POS'
+          'Order', 'Stock', 'Fulfillment', 'Finance', 'Transaction', 
+          'Checkout & Payment', 'POS', 'Product Offer', 'In-Store Ops'
         ].map(name => ({ name, type: 'business' as const }));
 
         const technicalSkills = [
-          'AI Coding', 'Automation Test', 'AI Agent/MCP/Skills'
+          'AI Coding', 'Automation Test', 'AI Agent/MCP/Skills', 'Big Data', 'Data Quality', 'App'
         ].map(name => ({ name, type: 'technical' as const }));
 
         await db.skills.bulkAdd([...businessSkills, ...technicalSkills]);
