@@ -283,13 +283,26 @@ export const Dashboard = () => {
         const batch = readyProjects.slice(i, i + BATCH_SIZE);
         setScheduleStatus(`🛠️ 阶段一：像素匹配 [${i+1}~${Math.min(i+BATCH_SIZE, readyProjects.length)}]...`);
         const { gaps: dGaps, idle: dIdle } = runAudit(readyProjects, resources, currentAllocations);
-        const bDev = batch.map(p => ({ ...p, gap: dGaps.find(g => g.id === p.id)?.devGap || 0 })).filter(p => p.gap > 0);
+        const bDev = batch.map(p => ({ 
+          ...p, 
+          gap: dGaps.find(g => g.id === p.id)?.devGap || 0,
+          projectTechLead: p.projectTechLead,
+          detailsProductDevMd: p.detailsProductDevMd
+        })).filter(p => p.gap > 0);
+        
         if (bDev.length && dIdle.some(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role))) {
           const sug = await suggestAllocationsForBatch(bDev as any, dIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)), 'dev', strategy, false);
           await applySuggestions(sug, 'dev', batch);
         }
+        
         const { gaps: tGaps, idle: tIdle } = runAudit(readyProjects, resources, currentAllocations);
-        const bTest = batch.map(p => ({ ...p, gap: tGaps.find(g => g.id === p.id)?.testGap || 0 })).filter(p => p.gap > 0);
+        const bTest = batch.map(p => ({ 
+          ...p, 
+          gap: tGaps.find(g => g.id === p.id)?.testGap || 0,
+          projectQualityLead: p.projectQualityLead,
+          detailsProductTestMd: p.detailsProductTestMd
+        })).filter(p => p.gap > 0);
+        
         if (bTest.length && tIdle.some(r => r.role === '测试工程师')) {
           const sug = await suggestAllocationsForBatch(bTest as any, tIdle.filter(r => r.role === '测试工程师'), 'test', strategy, false);
           await applySuggestions(sug, 'test', batch);
@@ -322,7 +335,16 @@ export const Dashboard = () => {
         if (hGaps.length === 0 || hIdle.length === 0) break;
         const pool = [...retryQueue, ...readyProjects.filter(p => !retryQueue.includes(p))];
         
-        const devG = hGaps.map(g => ({ ...g, gap: g.devGap })).filter(g => g.gap > 0);
+        const devG = hGaps.map(g => {
+          const p = readyProjects.find(rp => rp.id === g.id);
+          return { 
+            ...g, 
+            gap: g.devGap,
+            projectTechLead: p?.projectTechLead,
+            detailsProductDevMd: p?.detailsProductDevMd
+          };
+        }).filter(g => g.gap > 0);
+        
         const devI = hIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role));
         if (devG.length && devI.length) {
           const sug = await suggestAllocationsForBatch(devG as any, devI, 'dev', strategy, true);
@@ -330,7 +352,16 @@ export const Dashboard = () => {
         }
 
         const { gaps: hGaps2, idle: hIdle2 } = runAudit(readyProjects, resources, currentAllocations);
-        const testG = hGaps2.map(g => ({ ...g, gap: g.testGap })).filter(g => g.gap > 0);
+        const testG = hGaps2.map(g => {
+          const p = readyProjects.find(rp => rp.id === g.id);
+          return { 
+            ...g, 
+            gap: g.testGap,
+            projectQualityLead: p?.projectQualityLead,
+            detailsProductTestMd: p?.detailsProductTestMd
+          };
+        }).filter(g => g.gap > 0);
+        
         const testI = hIdle2.filter(r => r.role === '测试工程师');
         if (testG.length && testI.length) {
           const sug = await suggestAllocationsForBatch(testG as any, testI, 'test', strategy, true);

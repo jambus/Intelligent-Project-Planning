@@ -1,13 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
-import { Plus, Briefcase, Cpu, X, Save } from 'lucide-react';
+import { Plus, Briefcase, Cpu, X, Save, Upload, Download, FileDown, CheckCircle2 } from 'lucide-react';
+import { importSkillsFromFile } from '../../services/fileImport';
 
 export const Skills = () => {
   const skills = useLiveQuery(() => db.skills.toArray());
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [showModal, setShowModal] = useState(false);
   const [newSkillName, setNewSkillName] = useState('');
   const [newSkillType, setNewSkillType] = useState<'business' | 'technical'>('business');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importSuccess, setImportSuccess] = useState(false);
 
   // Initial data seeding
   useEffect(() => {
@@ -48,6 +53,51 @@ export const Skills = () => {
     }
   };
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const count = await importSkillsFromFile(file);
+      setImportSuccess(true);
+      setTimeout(() => setImportSuccess(false), 3000);
+      console.log(`Successfully imported ${count} unique skills.`);
+    } catch (err) {
+      console.error('Import failed:', err);
+      alert('导入失败，请检查文件格式。');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const downloadTemplate = () => {
+    const link = document.createElement('a');
+    link.href = '/sample_skills.csv';
+    link.download = 'sample_skills.csv';
+    link.click();
+  };
+
+  const exportToCSV = () => {
+    if (!skills || skills.length === 0) return;
+    
+    const headers = ['Name', 'Type'];
+    const csvContent = [
+      headers.join(','),
+      ...skills.map(s => [
+        `"${s.name}"`,
+        `"${s.type}"`
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `skills_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
   const businessSkills = skills?.filter(s => s.type === 'business') || [];
   const technicalSkills = skills?.filter(s => s.type === 'technical') || [];
 
@@ -58,13 +108,56 @@ export const Skills = () => {
           <h2 className="text-2xl font-bold text-gray-900 tracking-tight">人员技能管理</h2>
           <p className="text-gray-500 mt-1">管理团队的业务领域知识与技术栈能力标签</p>
         </div>
-        <button 
-          onClick={() => setShowModal(true)}
-          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-blue-100 text-sm font-bold transition-all transform hover:-translate-y-0.5"
-        >
-          <Plus size={18} />
-          <span>新增技能</span>
-        </button>
+
+        <div className="flex items-center space-x-3">
+          <input 
+            type="file" 
+            ref={fileInputRef}
+            onChange={handleImport}
+            className="hidden" 
+            accept=".csv,.xlsx"
+          />
+
+          <button 
+            onClick={downloadTemplate}
+            className="flex items-center space-x-2 bg-white hover:bg-gray-50 text-gray-600 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm text-xs font-bold transition-all"
+            title="下载导入模板"
+          >
+            <FileDown size={16} />
+            <span>模板下载</span>
+          </button>
+
+          <button 
+            onClick={exportToCSV}
+            disabled={!skills || skills.length === 0}
+            className="flex items-center space-x-2 bg-white hover:bg-gray-50 text-gray-600 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm text-xs font-bold transition-all disabled:opacity-50"
+            title="导出当前标签"
+          >
+            <Download size={16} />
+            <span>标签导出</span>
+          </button>
+
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isImporting}
+            className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+              importSuccess 
+                ? 'bg-green-50 border-green-200 text-green-600' 
+                : 'bg-white hover:bg-gray-50 text-blue-600 border-blue-200 shadow-sm'
+            }`}
+          >
+            {importSuccess ? <CheckCircle2 size={16} /> : <Upload size={16} />}
+            <span>{isImporting ? '导入中...' : importSuccess ? '导入成功' : '批量导入'}</span>
+          </button>
+
+          <button 
+            onClick={() => setShowModal(true)}
+            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-blue-100 text-sm font-bold transition-all transform hover:-translate-y-0.5 ml-2"
+          >
+            <Plus size={18} />
+            <span>新增技能</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

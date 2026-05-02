@@ -10,15 +10,21 @@ export const DEFAULT_SCHEDULING_PROMPT = `YOUR TASK:
 Match the best resources to fulfill the {{phase}} gaps for a BATCH of projects.
 
 CRITICAL INSTRUCTIONS:
-1. MAXIMIZE UTILIZATION: You MUST allocate ALL available "idleMd" across ALL candidate resources. 
-2. NO WASTE: Leaving a resource with idleMd > 0 when projects still have gaps is a FAILURE. 
-3. GREEDY MATCHING: If a resource has 20 idleMd and a project only needs 5, find other projects to fill the remaining 15. 
-4. {{skillRule}}
-5. Phase rules:
+1. MANDATORY LEADS: If a project has a named "projectTechLead" (for Dev) or "projectQualityLead" (for Test), you MUST assign that specific person to the project if they appear in the Candidate Resources and have "idleMd" > 0.
+   - For Leads, prefer a high "allocationPercentage" (e.g., 50% or 100%) to ensure they are properly involved.
+2. SKILL-BASED MATCHING: Use "techStack", "domain", and especially "detailsProductDevMd" / "detailsProductTestMd" to match resources with the right "skills".
+   - Priority: Match person's skills to the specific products/tasks mentioned in the project details.
+3. MAXIMIZE UTILIZATION: You MUST allocate ALL available "idleMd" across ALL candidate resources. 
+4. MINIMAL FRAGMENTATION: DO NOT split a single project into many tiny 1-2 day chunks across different people. 
+   - A project should ideally have 1-2 primary owners. 
+   - MINIMUM ALLOCATION UNIT: Each assignment MUST be at least 3 days (if the project gap and resource idleMd allow).
+5. NO WASTE: Leaving a resource with idleMd > 0 when projects still have gaps is a FAILURE. 
+6. {{skillRule}}
+7. Phase rules:
    - If phase is 'dev', only assign Developers (前端/后端/APP/全栈).
    - If phase is 'test', only assign Testers (测试工程师). Testing can start as early as the same day as development, but MUST NOT start before development.
-6. Provide "allocatedMd" (integer >= 1) and "allocationPercentage".
-7. {{strategyInstruction}}
+8. Provide "allocatedMd" (integer >= 1) and "allocationPercentage".
+9. {{strategyInstruction}}
 
 Return ONLY a JSON Array with this exact format (do not wrap in markdown blocks, raw JSON only):
 [{"projectId": 1, "resourceId": 1, "targetGap": "{{phase}}", "allocatedMd": 5, "allocationPercentage": 100, "reason": "Reason..."}]`;
@@ -76,7 +82,19 @@ export type SchedulingStrategy = 'balanced' | 'focused' | 'urgent';
  * Enhanced Batch Scheduling with Calendar Awareness & Greedy Logic
  */
 export const suggestAllocationsForBatch = async (
-  projects: { id: number; name: string; gap: number; techStack?: string; domain?: string; startDate?: string; endDate?: string }[],
+  projects: { 
+    id: number; 
+    name: string; 
+    gap: number; 
+    techStack?: string; 
+    domain?: string; 
+    startDate?: string; 
+    endDate?: string;
+    projectTechLead?: string;
+    projectQualityLead?: string;
+    detailsProductDevMd?: string;
+    detailsProductTestMd?: string;
+  }[],
   idleResources: { id: number; name: string; role: string; idleMd: number; skills: string[]; scheduleSummary?: string }[],
   phase: 'dev' | 'test',
   strategy: SchedulingStrategy = 'focused',
@@ -118,7 +136,7 @@ ${JSON.stringify(projects)}
 Return ONLY a JSON Array.`;
 
   console.log(`[AI Debug] 🚀 Sending Request to LLM (${phase.toUpperCase()}, Relaxed: ${isRelaxed})`);
-  console.log(`[AI Debug] Projects:`, projects.map(p => `${p.name} (Gap: ${p.gap}d)`));
+  console.log(`[AI Debug] Projects:`, projects.map(p => `${p.name} (Gap: ${p.gap}d, Lead: ${phase === 'dev' ? p.projectTechLead : p.projectQualityLead})`));
   console.log(`[AI Debug] Resources:`, idleResources.map(r => `${r.name} (${r.role}, Idle: ${r.idleMd}d)`));
 
   const result = await callAI(systemMsg, prompt, settings);

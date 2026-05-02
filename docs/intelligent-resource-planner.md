@@ -51,7 +51,7 @@
 *   **技能标签管理 (Skills Management)**：独立页面，管理团队的「业务领域能力」与「技术能力」标签。
     *   **业务领域**：如 Order, Stock, Fulfillment, Transaction, Checkout & Payment, POS 等。
     *   **技术技能**：如 AI Coding, Automation Test, Big Data, Data Quality, App 等。
-    *   支持标签的 CRUD 操作，为 AI 智能匹配提供标准化的维度。
+    *   支持标签的 CRUD 操作，并支持通过 CSV 批量导入/导出技能标签，为 AI 智能匹配提供标准化的维度。
 *   **本地文件导入 (CSV/XLSX Import)**：支持通过手动上传 CSV 或 Excel 批量导入项目，系统会自动执行全量覆盖更新。
 *   **Jira 预警机制 (Alerts)**：对资源超量分配进行红绿灯预警，并在 Jira 原生 Issue 页面中悬浮展示。
 
@@ -150,6 +150,9 @@ graph TD
 3. **动态排期策略模板 (Strategy Templates) 与自定义 Prompt**：
    * **专注模式 (Focused)**：默认模式，倾向于安排 100% 投入，单线程快速击穿项目。
    * **均衡模式 (Balanced)**：引入时间切片概念，建议 50% 的投入占比，以支持资源进行多项目并行。
+   * **反碎片化约束 (Anti-Fragmentation)**：系统强制要求 AI 减少项目拆解。每个任务建议至少分配 3 天（除非缺口不足），且每个项目的每个阶段原则上不超过 2 名负责人，以降低沟通成本并保证项目交付的连续性。
+   * **负责人强制锁定 (Mandatory Leads)**：系统会自动识别项目定义的「技术负责人」与「质量负责人」。如果该负责人在资源库中且有闲置时间，AI 将被强制要求将其排入该项目，并确保其占有合理的投入比例。
+   * **基于明细的技能匹配 (Detail-based Matching)**：AI 会深度解析 `Details Product DEV/TEST MD` 字段中的具体产品明细，优先匹配具备相关业务领域知识或技术能力的研发人员。
    * **紧急模式 (Urgent)**：允许满负荷或超负荷加班分配，以确保最高优项目快速推进。
    * **自定义排期指令 (Editable Prompt)**：在系统设置页面，用户可以自由修改 AI 的核心决策 Prompt。通过自定义 Prompt，团队可以轻松扩展独有的业务分配准则（例如：禁止全栈接手核心前端项目等），且一键 支持重置回系统默认逻辑。
 4. **严格排期窗口约束与防死循环 (Strict Scheduling Window & Early Exit)**：用户的排期时间选择区间（如 4月至6月）即为绝对物理边界。

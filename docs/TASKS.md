@@ -217,3 +217,12 @@
     - [x] **DONE** 17.1 **独立技能管理页**：新增 Skills 页面，支持业务领域能力与技术能力的分类展示。
     - [x] **DONE** 17.2 **技能标签 CRUD**：实现技能标签的新增与删除，并内置初始化常用标签。
     - [x] **DONE** 17.3 **数据持久化**：升级 IndexedDB Schema (v4) 以存储技能数据。
+    ## 阶段十八：算法调优与反碎片化 (Phase 18: Algorithm Tuning & Anti-Fragmentation)
+
+    - [x] **DONE** 18.1 **反碎片化指令注入**：在 Prompt 中明确禁止将项目拆解为 1-2 天的小碎片。
+    - [x] **DONE** 18.2 **最小分配单元约束**：设定建议最小分配为 3 天，并要求 AI 保持负责人集中（1-2人）。
+    ## 阶段十九：负责人锁定与明细深度匹配 (Phase 19: Lead Locking & Detailed Skill Matching)
+
+    - [x] **DONE** 19.1 **关键负责人锁定**：在 Prompt 中增加强制指令，确保项目的 Tech Lead 和 Quality Lead 只要在库且有空，就必须被排入该项目。
+    - [x] **DONE** 19.2 **任务明细关联匹配**：将 `Details Product DEV/TEST MD` 传给 AI，要求其根据明细中的产品/业务关键词，优先匹配具备相应技能标签的人员。
+    - [x] **DONE** 19.3 **字段透传优化**：在 `Dashboard.tsx` 的所有排期 Pass 中增加负责人和明细字段的透传。
