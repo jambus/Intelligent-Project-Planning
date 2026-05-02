@@ -55,12 +55,19 @@ export interface Setting {
   value: any;
 }
 
+export interface Skill {
+  id?: number;
+  name: string;
+  type: 'business' | 'technical';
+}
+
 export class PlannerDatabase extends Dexie {
   resources!: Table<Resource, number>;
   projects!: Table<Project, number>;
   allocations!: Table<Allocation, number>;
   jiraWorklogs!: Table<JiraWorklog, number>;
   settings!: Table<Setting, string>;
+  skills!: Table<Skill, number>;
 
   constructor() {
     super('IntelligentResourcePlannerDB');
@@ -81,6 +88,10 @@ export class PlannerDatabase extends Dexie {
 
     this.version(3).stores({
       allocations: '++id, resourceId, projectId, startDate, endDate, allocationType'
+    });
+
+    this.version(4).stores({
+      skills: '++id, name, type'
     });
   }
 }
