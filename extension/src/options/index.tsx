@@ -8,6 +8,7 @@ import { Resources } from './pages/Resources';
 import { Settings } from './pages/Settings';
 import { Holidays } from './pages/Holidays';
 import { Skills } from './pages/Skills';
+import { SchedulingProvider } from '../context/SchedulingContext';
 import '../index.css';
 
 const container = document.getElementById('root');
@@ -15,18 +16,20 @@ if (container) {
   const root = createRoot(container);
   root.render(
     <StrictMode>
-      <HashRouter>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="projects" element={<Projects />} />
-            <Route path="resources" element={<Resources />} />
-            <Route path="skills" element={<Skills />} />
-            <Route path="holidays" element={<Holidays />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
-        </Routes>
-      </HashRouter>
+      <SchedulingProvider>
+        <HashRouter>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="projects" element={<Projects />} />
+              <Route path="resources" element={<Resources />} />
+              <Route path="skills" element={<Skills />} />
+              <Route path="holidays" element={<Holidays />} />
+              <Route path="settings" element={<Settings />} />
+            </Route>
+          </Routes>
+        </HashRouter>
+      </SchedulingProvider>
     </StrictMode>
   );
 }
