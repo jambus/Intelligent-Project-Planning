@@ -1,6 +1,8 @@
 {
   "name": "irp-root",
+  "version": "1.0.3",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "npm run dev --prefix extension",
     "build": "npm run build --prefix extension",

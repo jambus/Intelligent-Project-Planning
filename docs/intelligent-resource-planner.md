@@ -180,3 +180,6 @@ graph TD
 *   插件的 Content Script 会监听页面 DOM 变化（特别是 Jira 的 `[data-testid="issue.views.field.user.assignee"]` 元素）。
 *   当识别到具体的处理人姓名时，异步查询 IndexedDB 计算其当前所有进行中项目分配累加的负荷百分比。
 *   将负荷情况以不侵入原有 DOM 结构的方式，在页面右下角以红/黄/绿悬浮卡片展示预警。
+
+#### 3.3.7 开源协议 (License)
+本项目采用 **MIT 开源协议**，允许用户自由地使用、修改和分发代码，确保了工具的开放性与社区共享精神。

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.3] - 2026-05-05
+
+ ### 优化与增强 (Improvements & Enhancements)
+    **开源协议变更**：将项目的授权协议变更为 **MIT License**，鼓励社区贡献与二次开发，同时允许个人及商业用途的免费使用。
+
+
 ## [1.0.2] - 2026-05-03
 
 ### 优化与修复 (Improvements & Fixes)
