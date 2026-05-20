@@ -53,8 +53,12 @@ export const Dashboard = () => {
         const md = Math.round((workingDays * (a.allocationPercentage || 0)) / 100);
         if (a.allocationType === 'test' || res?.role === '测试工程师') test += md; else dev += md;
       });
-      const effectiveDevTotal = Math.max(0, (p.devTotalMd || 0) - (p.devLoggedMd || 0));
-      const effectiveTestTotal = Math.max(0, (p.testTotalMd || 0) - (p.testLoggedMd || 0));
+      const logged = p.totalLoggedMd || 0;
+      const devTotal = p.devTotalMd || 0;
+      const testTotal = p.testTotalMd || 0;
+      const effectiveDevTotal = Math.max(0, devTotal - logged);
+      const remainingLogged = Math.max(0, logged - devTotal);
+      const effectiveTestTotal = Math.max(0, testTotal - remainingLogged);
       return { ...p, devGap: Math.max(0, effectiveDevTotal - dev), testGap: Math.max(0, effectiveTestTotal - test) };
     }).filter(p => p.devGap >= 1 || p.testGap >= 1);
 

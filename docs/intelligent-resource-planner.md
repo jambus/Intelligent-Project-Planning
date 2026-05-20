@@ -216,7 +216,8 @@ graph TD
 
 #### 3.3.12 Jira 工时同步与动态排期扣减 (Jira Timesheet Sync & Deduction)
 在 v1.0.4 版本中，系统新增了专门的「Jira 管理」模块，实现已发生工作量与未来排期的无缝衔接：
-1. **动态 JQL 查询范围 (Query Scope)**：用户可在系统设置中配置关联的 Jira Projects（如 `PROJ-A, PROJ-B`）。配置后，系统会自动在底层的工时拉取 JQL 中加上 `project in (...)` 的条件限定，这不仅能显著提升 API 查询速度，还能避免跨项目出现同名 Epic Key 的冲突问题。
-2. **Epic 级别工时拉取**：对于在系统导入时包含 `jiraEpicKey` 的项目，用户可以在“Jira 管理”页面点击「一键同步 Jira 工时」。系统会自动批量拉取这些 Epic 下所有子任务（Issue）的已记录工时 (`timespent`)。
-3. **智能工时归类 (Dev vs Test)**：在拉取到子任务后，系统会根据其 Jira 任务类型 (`issuetype.name`) 进行智能归类。如果类型名称包含 "Test", "QA", "Bug", "测试", "缺陷" 等关键字，则累加为测试已录入工时 (`testLoggedMd`)；否则，默认为开发已录入工时 (`devLoggedMd`)。工时单位按照 1 MD = 8 小时（28800 秒）的行业标准自动换算。
-4. **排期按需扣减 (Effective MD Scheduling)**：底层排期引擎（SchedulingContext）升级。在启动大盘 AI 排期或计算需求缺口时，系统会自动在原始评估的 `devTotalMd` 和 `testTotalMd` 中扣减掉这些从 Jira 同步过来的真实已发生工时。AI 引擎现在只会针对剩下的**净缺口 (Effective MD)** 进行智能调度，避免了因重复排期导致的资源过载。
+1. **智能模糊搜索 (Fuzzy Epic Matching)**：对于在系统导入时包含 `jiraEpicKey` 的项目，即使输入的是 Epic 的名称前缀（如 `COMMON Security`），系统也会在设定的项目范围内自动执行两次检索：首先匹配出真正的 Epic Key，然后再精准拉取其下所有子任务的已记录工时 (`timespent`)。
+2. **动态 JQL 查询范围 (Query Scope)**：用户可在系统设置中配置关联的 Jira Projects（如 `PROJ-A, PROJ-B`）。配置后，系统会自动在底层的工时拉取 JQL 中加上 `project in (...)` 的条件限定，这不仅能显著提升 API 查询速度，还能为名称的模糊搜索划定范围，避免跨项目冲突。
+3. **自定义工时折算率 (Custom Hours Per Man-Day)**：系统支持在设置中动态调整 1 人天等于多少小时（默认 6 小时）。所有从 Jira 拉取到的 `timespent` (秒) 都会按此参数进行转换。
+4. **统一工时聚合 (Unified Hours Logging)**：由于实际场景中 Jira 内很难精准区分开发与测试的工时类型，系统会将拉取到的所有子任务 `timespent` 直接合并为该 Epic 的“已消费总工时 (`totalLoggedMd`)”。
+5. **排期智能扣减 (Dev-First Deduction)**：底层排期引擎（SchedulingContext）升级。在启动大盘 AI 排期或计算需求缺口时，系统会采用“优先扣减开发”的策略：优先使用已消费总工时抵扣项目的原始开发评估 (Dev MD)；如果总工时超出了开发需求，溢出部分则继续抵扣测试需求 (Test MD)。AI 引擎最终只会针对抵扣后的**净缺口 (Effective MD)** 进行智能调度，避免了因项目已进行部分开工而导致全局资源超载。

@@ -5,6 +5,7 @@ interface JiraSettings {
   email: string;
   apiToken: string;
   projects?: string;
+  hoursPerDay?: number;
 }
 
 export const getJiraSettings = async (): Promise<JiraSettings | null> => {
@@ -12,9 +13,11 @@ export const getJiraSettings = async (): Promise<JiraSettings | null> => {
   const email = await getStorageItem<string>('jiraEmail');
   const apiToken = await getStorageItem<string>('jiraApiToken');
   const projects = await getStorageItem<string>('jiraProjects');
+  const hoursPerDayStr = await getStorageItem<string>('jiraHoursPerDay');
+  const hoursPerDay = hoursPerDayStr ? Number(hoursPerDayStr) : 6;
 
   if (!domain) return null;
-  return { domain, email: email || '', apiToken: apiToken || '', projects: projects || '' };
+  return { domain, email: email || '', apiToken: apiToken || '', projects: projects || '', hoursPerDay };
 };
 
 const fetchFromJira = async (endpoint: string, settings: JiraSettings, method: string = 'GET', body?: any) => {
@@ -63,8 +66,7 @@ export const syncJiraIssues = async (projectKey: string): Promise<any> => {
 
 export interface EpicHours {
   epicKey: string;
-  devLoggedMd: number;
-  testLoggedMd: number;
+  totalLoggedMd: number;
 }
 
 /**
@@ -75,21 +77,32 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
   const settings = await getJiraSettings();
   if (!settings) throw new Error('Jira 设置未配置 (Jira settings not configured).');
 
+  // We added jiraHoursPerDay to JiraSettings locally in settings.tsx, we need to read it here if added, default to 6.
+  // Wait, I need to make sure getJiraSettings reads it. I added it to getJiraSettings in the previous step? Yes.
+  const hoursPerDay = (settings as any).hoursPerDay || 6;
+  const secondsPerDay = hoursPerDay * 3600;
+
   const result: Record<string, EpicHours> = {};
-  
-  // Initialize result
   epicKeys.forEach(key => {
-    if (key) result[key] = { epicKey: key, devLoggedMd: 0, testLoggedMd: 0 };
+    if (key) result[key] = { epicKey: key, totalLoggedMd: 0 };
   });
 
-  const validKeys = epicKeys
+  const validUserKeys = epicKeys
     .map(k => k ? k.replace(/['"]/g, '').trim() : '')
     .filter(k => k !== '');
-  if (validKeys.length === 0) return result;
+  if (validUserKeys.length === 0) return result;
 
-  // Chunk keys to avoid URL too long error
-  const chunkSize = 30;
-  
+  const standardKeys: string[] = [];
+  const fuzzyNames: string[] = [];
+
+  validUserKeys.forEach(k => {
+    if (/^[A-Za-z]+-\d+$/.test(k) || /^\d+$/.test(k)) {
+      standardKeys.push(k);
+    } else {
+      fuzzyNames.push(k);
+    }
+  });
+
   let projectJql = '';
   if (settings.projects) {
     const projArr = settings.projects.split(',').map(p => {
@@ -97,68 +110,100 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
       return `"${cleanProj}"`;
     }).filter(p => p !== '""');
     if (projArr.length > 0) {
-      projectJql = `project in (${projArr.join(',')}) AND `;
+      projectJql = `project in (${projArr.join(',')})`;
     }
   }
 
-  for (let i = 0; i < validKeys.length; i += chunkSize) {
-    const chunk = validKeys.slice(i, i + chunkSize);
-    
-    // "parent in" strictly requires a Jira Key (PROJ-123) or ID (12345). Epic Names will crash the API.
-    // Use cf[10014] instead of the deprecated "Epic Link" field name — Jira Cloud no longer accepts
-    // the display name in newer search endpoints and strict JQL validation.
-    const strictKeys = chunk.filter(k => /^[A-Za-z]+-\d+$/.test(k) || /^\d+$/.test(k));
-    
-    const allKeysStr = chunk.map(k => `"${k}"`).join(',');
-    const conditions = [`cf[10014] in (${allKeysStr})`];
-    
-    if (strictKeys.length > 0) {
-      const strictStr = strictKeys.map(k => `"${k}"`).join(',');
-      conditions.push(`parent in (${strictStr})`);
+  const epicKeyToUserInputMap: Record<string, string> = {};
+  standardKeys.forEach(k => epicKeyToUserInputMap[k] = k);
+
+  // Step 1: Fuzzy search for Epics by name
+  if (fuzzyNames.length > 0) {
+    let epicSearchJql = `issuetype = Epic`;
+    if (projectJql) {
+       epicSearchJql = `${projectJql} AND issuetype = Epic`;
+    } else {
+       const terms = fuzzyNames.map(name => {
+           const safe = name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, ' ').trim().split(' ')[0];
+           return safe ? `summary ~ "${safe}*"` : '';
+       }).filter(x => x);
+       if (terms.length > 0) {
+           epicSearchJql += ` AND (${terms.join(' OR ')})`;
+       }
     }
 
-    const jql = `${projectJql}(${conditions.join(' OR ')})`;
-    
     let nextPageToken: string | undefined;
-    const maxResults = 100;
+    let hasMore = true;
+    while (hasMore) {
+      const body: Record<string, any> = {
+        jql: epicSearchJql,
+        maxResults: 100,
+        fields: ['summary'],
+      };
+      if (nextPageToken) body.nextPageToken = nextPageToken;
+      
+      try {
+        const data = await fetchFromJira('search/jql', settings, 'POST', body);
+        const epics = data.issues || [];
+        epics.forEach((epic: any) => {
+            const summary = epic.fields.summary || '';
+            for (const name of fuzzyNames) {
+                if (summary.toLowerCase().startsWith(name.toLowerCase())) {
+                    epicKeyToUserInputMap[epic.key] = name;
+                }
+            }
+        });
+        nextPageToken = data.nextPageToken;
+        hasMore = !!nextPageToken;
+      } catch (e) {
+        console.warn("Epic fuzzy search failed", e);
+        hasMore = false;
+      }
+    }
+  }
+
+  // Step 2: Fetch logged hours for all mapped Epic keys
+  const targetEpicKeys = Object.keys(epicKeyToUserInputMap);
+  if (targetEpicKeys.length === 0) return result;
+
+  const chunkSize = 30;
+  for (let i = 0; i < targetEpicKeys.length; i += chunkSize) {
+    const chunk = targetEpicKeys.slice(i, i + chunkSize);
+    const chunkStr = chunk.map(k => `"${k}"`).join(',');
+    
+    // targetEpicKeys only contains standard Jira keys discovered from Step 1 or provided in standardKeys,
+    // so using 'parent in' and 'issueKey in' is 100% safe.
+    const jql = `${projectJql ? projectJql + ' AND ' : ''}(parent in (${chunkStr}) OR cf[10014] in (${chunkStr}) OR issueKey in (${chunkStr}))`;
+
+    let nextPageToken: string | undefined;
     let hasMore = true;
 
     while (hasMore) {
-      // POST /search/jql uses cursor-based pagination via nextPageToken.
-      // The old startAt/total fields are NOT accepted and cause "Invalid request payload".
       const body: Record<string, any> = {
         jql,
-        maxResults,
+        maxResults: 100,
         fields: ['parent', 'customfield_10014', 'issuetype', 'timespent'],
       };
-      if (nextPageToken) {
-        body.nextPageToken = nextPageToken;
-      }
-      const data = await fetchFromJira('search/jql', settings, 'POST', body);
+      if (nextPageToken) body.nextPageToken = nextPageToken;
       
+      const data = await fetchFromJira('search/jql', settings, 'POST', body);
       const issues = data.issues || [];
+      
       issues.forEach((issue: any) => {
         const timeSpentSeconds = issue.fields.timespent || 0;
         if (timeSpentSeconds <= 0) return;
 
-        // Identify which epic this belongs to
-        let epicKey = '';
+        let actualKey = issue.key;
         if (issue.fields.parent && issue.fields.parent.key) {
-          epicKey = issue.fields.parent.key;
+          actualKey = issue.fields.parent.key;
         } else if (issue.fields.customfield_10014) {
-          epicKey = issue.fields.customfield_10014;
+          actualKey = issue.fields.customfield_10014;
         }
 
-        if (epicKey && result[epicKey]) {
-          const typeName = (issue.fields.issuetype?.name || '').toLowerCase();
-          const isTest = /test|QA|bug|测试|缺陷|故障/i.test(typeName);
-          
-          const md = timeSpentSeconds / 28800; // 8 hours = 1 MD
-          if (isTest) {
-            result[epicKey].testLoggedMd += md;
-          } else {
-            result[epicKey].devLoggedMd += md;
-          }
+        const userInputKey = epicKeyToUserInputMap[actualKey];
+        if (userInputKey && result[userInputKey]) {
+            const md = timeSpentSeconds / secondsPerDay;
+            result[userInputKey].totalLoggedMd += md;
         }
       });
 

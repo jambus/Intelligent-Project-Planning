@@ -29,8 +29,7 @@ export const JiraSync = () => {
         if (stats) {
           return {
             ...p,
-            devLoggedMd: stats.devLoggedMd,
-            testLoggedMd: stats.testLoggedMd,
+            totalLoggedMd: stats.totalLoggedMd,
           };
         }
         return p;
@@ -83,10 +82,9 @@ export const JiraSync = () => {
                 <tr className="border-b border-gray-200 text-gray-400 font-black uppercase tracking-widest bg-gray-50/50 text-xs">
                   <th className="p-4">项目名称</th>
                   <th className="p-4">Epic Key</th>
-                  <th className="p-4 text-center border-l border-gray-100">开发总需求 (MD)</th>
-                  <th className="p-4 text-center text-blue-600 bg-blue-50/10">开发已录入 (MD)</th>
-                  <th className="p-4 text-center border-l border-gray-100">测试总需求 (MD)</th>
-                  <th className="p-4 text-center text-teal-600 bg-teal-50/10">测试已录入 (MD)</th>
+                  <th className="p-4 text-center border-l border-gray-100">原始开发工时 (MD)</th>
+                  <th className="p-4 text-center border-l border-gray-100">原始测试工时 (MD)</th>
+                  <th className="p-4 text-center text-blue-600 bg-blue-50/10">已消费总工时 (MD)</th>
                 </tr>
               </thead>
               <tbody>
@@ -96,13 +94,10 @@ export const JiraSync = () => {
                     <td className="p-4"><span className="px-2 py-1 bg-gray-100 text-gray-600 font-mono text-xs rounded font-bold">{p.jiraEpicKey}</span></td>
                     
                     <td className="p-4 text-center font-mono font-medium border-l border-gray-50">{p.devTotalMd}</td>
-                    <td className="p-4 text-center font-mono font-bold text-blue-600 bg-blue-50/10">
-                      {p.devLoggedMd !== undefined ? p.devLoggedMd.toFixed(1) : '-'}
-                    </td>
-                    
                     <td className="p-4 text-center font-mono font-medium border-l border-gray-50">{p.testTotalMd}</td>
-                    <td className="p-4 text-center font-mono font-bold text-teal-600 bg-teal-50/10">
-                      {p.testLoggedMd !== undefined ? p.testLoggedMd.toFixed(1) : '-'}
+                    
+                    <td className="p-4 text-center font-mono font-bold text-blue-600 bg-blue-50/10">
+                      {p.totalLoggedMd !== undefined ? p.totalLoggedMd.toFixed(1) : '-'}
                     </td>
                   </tr>
                 ))}

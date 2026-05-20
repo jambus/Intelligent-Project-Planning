@@ -346,3 +346,31 @@ Interaction Summary                                                             
 │    ↳ main                          75     6,801,695     6,046,759         7,298                                                                                                                          │
 │    ↳ utility_compressor             6       164,616             0         1,040                                                                                                                          │
 │  To resume this session: gemini --resume 7d69ed6b-bcb0-4aba-be2f-d3bcacda2965                   
+
+
+ Interaction Summary                                                                                                                                                                                     │
+│  Session ID:                 7d69ed6b-bcb0-4aba-be2f-d3bcacda2965                                                                                                                                        │
+│  Tool Calls:                 147 ( ✓ 145 x 2 )                                                                                                                                                           │
+│  Success Rate:               98.6%                                                                                                                                                                       │
+│  User Agreement:             100.0% (147 reviewed)                                                                                                                                                       │
+│  Code Changes:               +608 -197                                                                                                                                                                   │
+│                                                                                                                                                                                                          │
+│  Performance                                                                                                                                                                                             │
+│  Wall Time:                  1h 52m 22s                                                                                                                                                                  │
+│  Agent Active:               41m 14s                                                                                                                                                                     │
+│    » API Time:               35m 27s (86.0%)                                                                                                                                                             │
+│    » Tool Time:              5m 46s (14.0%)                                                                                                                                                              │
+│                                                                                                                                                                                                          │
+│                                                                                                                                                                                                          │
+│  Model Usage                                                                                                                                                                                             │
+│  Use /model to view model quota information                                                                                                                                                              │
+│                                                                                                                                                                                                          │
+│  Model                           Reqs  Input Tokens   Cache Reads Output Tokens                                                                                                                          │
+│  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  │
+│  gemini-3.1-pro-preview           142    19,460,306    16,895,035        49,182                                                                                                                          │
+│    ↳ main                         140    19,131,168    16,895,035        45,928                                                                                                                          │
+│    ↳ utility_compressor             2       329,138             0         3,254                                                                                                                          │
+│  gemini-3-flash-preview             8        51,156        19,948         3,539                                                                                                                          │
+│    ↳ utility_loop_detector          1         5,296             0           119                                                                                                                          │
+│    ↳ utility_tool                   7        45,860        19,948         3,420                                                                                                                          │
+│  To resume this session: gemini --resume 7d69ed6b-bcb0-4aba-be2f-d3bcacda2965                     

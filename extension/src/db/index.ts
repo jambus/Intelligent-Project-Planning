@@ -23,8 +23,9 @@ export interface Project {
   jiraEpicKey: string; // Jira Epic Key
   devTotalMd: number; // Dev Total MD (开发评估总天数)
   testTotalMd: number; // Test Total MD (测试评估总天数)
-  devLoggedMd?: number; // Synced Dev Logged MD from Jira
-  testLoggedMd?: number; // Synced Test Logged MD from Jira
+  totalLoggedMd?: number; // Synced Total Logged MD from Jira (Total Consumed)
+  devLoggedMd?: number; // Synced Dev Logged MD from Jira (Deprecated)
+  testLoggedMd?: number; // Synced Test Logged MD from Jira (Deprecated)
   projectTechLead?: string; // Project Tech Lead
   projectQualityLead?: string; // Project Quality Lead
   detailsProductDevMd?: string; // Details Product DEV MD

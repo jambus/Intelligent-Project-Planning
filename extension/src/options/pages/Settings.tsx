@@ -6,6 +6,7 @@ import { DEFAULT_SCHEDULING_PROMPT } from '../../services/ai';
 export const Settings = () => {
   const [jiraDomain, setJiraDomain] = useState('');
   const [jiraProjects, setJiraProjects] = useState('');
+  const [jiraHoursPerDay, setJiraHoursPerDay] = useState(6);
   const [jiraEmail, setJiraEmail] = useState('');
   const [jiraToken, setJiraToken] = useState('');
   const [openAiKey, setOpenAiKey] = useState('');
@@ -20,6 +21,8 @@ export const Settings = () => {
     const loadSettings = async () => {
       setJiraDomain(await getStorageItem('jiraDomain') || '');
       setJiraProjects(await getStorageItem('jiraProjects') || '');
+      const hours = await getStorageItem('jiraHoursPerDay');
+      setJiraHoursPerDay(hours ? Number(hours) : 6);
       setJiraEmail(await getStorageItem('jiraEmail') || '');
       setJiraToken(await getStorageItem('jiraApiToken') || '');
       setOpenAiKey(await getStorageItem('openAiApiKey') || '');
@@ -36,6 +39,7 @@ export const Settings = () => {
     try {
       await setStorageItem('jiraDomain', jiraDomain);
       await setStorageItem('jiraProjects', jiraProjects);
+      await setStorageItem('jiraHoursPerDay', jiraHoursPerDay);
       await setStorageItem('jiraEmail', jiraEmail);
       await setStorageItem('jiraApiToken', jiraToken);
       await setStorageItem('openAiApiKey', openAiKey);
@@ -97,6 +101,17 @@ export const Settings = () => {
                   value={jiraProjects} onChange={e => setJiraProjects(e.target.value)}
                 />
                 <p className="text-xs text-gray-500 mt-1">配置后，拉取 Epic 工时会在底层加上 `project in (...)` 条件，提升查询速度并避免跨项目冲突。留空则全局搜索。</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">每日工时换算标准 (Hours per Man-Day)</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  max="24"
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  value={jiraHoursPerDay} onChange={e => setJiraHoursPerDay(Number(e.target.value))}
+                />
+                <p className="text-xs text-gray-500 mt-1">从 Jira 拉取的 `timespent` (秒) 会除以该数值换算为人天 (MD)，默认 6 小时 = 1 MD。</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
