@@ -85,6 +85,7 @@ export const JiraSync = () => {
                   <th className="p-4 text-center border-l border-gray-100">原始开发工时 (MD)</th>
                   <th className="p-4 text-center border-l border-gray-100">原始测试工时 (MD)</th>
                   <th className="p-4 text-center text-blue-600 bg-blue-50/10">已消费总工时 (MD)</th>
+                  <th className="p-4 text-center text-green-600 bg-green-50/10 border-l border-gray-100">剩余总工时 (MD)</th>
                 </tr>
               </thead>
               <tbody>
@@ -98,6 +99,11 @@ export const JiraSync = () => {
                     
                     <td className="p-4 text-center font-mono font-bold text-blue-600 bg-blue-50/10">
                       {p.totalLoggedMd !== undefined ? p.totalLoggedMd.toFixed(1) : '-'}
+                    </td>
+                    <td className="p-4 text-center font-mono font-bold text-green-600 bg-green-50/10 border-l border-gray-100">
+                      {p.totalLoggedMd !== undefined 
+                        ? Math.max(0, (p.devTotalMd + p.testTotalMd) - p.totalLoggedMd).toFixed(1) 
+                        : '-'}
                     </td>
                   </tr>
                 ))}

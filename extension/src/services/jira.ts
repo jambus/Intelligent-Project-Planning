@@ -126,7 +126,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
     for (let i = 0; i < standardKeys.length; i += verificationChunkSize) {
       const subChunk = standardKeys.slice(i, i + verificationChunkSize);
       const subChunkStr = subChunk.map(k => `"${k}"`).join(',');
-      const verifyJql = `${projectJql ? projectJql + ' AND ' : ''}issueKey in (${subChunkStr}) AND issuetype = Epic AND created >= -365d`;
+      const verifyJql = `${projectJql ? projectJql + ' AND ' : ''}issueKey in (${subChunkStr}) AND issuetype in (Epic, "长篇故事") AND created >= -365d`;
       
       let nextPageToken: string | undefined;
       let hasMore = true;
@@ -143,7 +143,11 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
           const epics = data.issues || [];
           epics.forEach((epic: any) => {
             if (epic.key) {
-              epicKeyToUserInputMap[epic.key] = epic.key;
+              // Map the standardized Epic Key from Jira (usually uppercase) back to the user's original input key (case-insensitive match)
+              const matchedKey = subChunk.find(k => k.toLowerCase() === epic.key.toLowerCase());
+              if (matchedKey) {
+                epicKeyToUserInputMap[epic.key] = matchedKey;
+              }
             }
           });
           nextPageToken = data.nextPageToken;
@@ -158,19 +162,29 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
 
   // Step 1b: Fuzzy search for Epics by name (only created within the last year)
   if (fuzzyNames.length > 0) {
-    let epicSearchJql = `issuetype = Epic AND created >= -365d`;
-    if (projectJql) {
-       epicSearchJql = `${projectJql} AND issuetype = Epic AND created >= -365d`;
-    } else {
-       const terms = fuzzyNames.map(name => {
-           const safe = name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, ' ').trim().split(' ')[0];
-           return safe ? `summary ~ "${safe}*"` : '';
-       }).filter(x => x);
-       if (terms.length > 0) {
-           epicSearchJql += ` AND (${terms.join(' OR ')})`;
-       }
+    const terms = fuzzyNames.map(name => {
+        // Clean bracket wrappers and extract the main search keyword safely
+        const clean = name.replace(/[\[\]]/g, '').trim();
+        const safe = clean.replace(/[^a-zA-Z0-9\u4e00-\u9fa5\-_]/g, ' ').trim().split(' ')[0];
+        return safe ? `summary ~ "${safe}*"` : '';
+    }).filter(x => x);
+    
+    let termsJql = '';
+    if (terms.length > 0) {
+        termsJql = `(${terms.join(' OR ')})`;
     }
 
+    let epicSearchJql = `issuetype in (Epic, "长篇故事") AND created >= -365d`;
+    if (projectJql) {
+       epicSearchJql = `${projectJql} AND issuetype in (Epic, "长篇故事") AND created >= -365d`;
+       if (termsJql) {
+           epicSearchJql += ` AND ${termsJql}`;
+       }
+    } else {
+       if (termsJql) {
+           epicSearchJql += ` AND ${termsJql}`;
+       }
+    }
 
     let nextPageToken: string | undefined;
     let hasMore = true;
@@ -187,8 +201,13 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
         const epics = data.issues || [];
         epics.forEach((epic: any) => {
             const summary = epic.fields.summary || '';
+            const cleanSummary = summary.toLowerCase().replace(/^[\[\s]+/, '');
+            
             for (const name of fuzzyNames) {
-                if (summary.toLowerCase().startsWith(name.toLowerCase())) {
+                const cleanName = name.toLowerCase().replace(/^[\[\s]+/, '');
+                
+                // Matches standard start or bracket-wrapped start (e.g. "[PROJ-123] ...")
+                if (cleanSummary.startsWith(cleanName) || summary.toLowerCase().startsWith(name.toLowerCase())) {
                     epicKeyToUserInputMap[epic.key] = name;
                 }
             }
@@ -201,6 +220,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
       }
     }
   }
+
 
   // Step 2: Fetch logged hours for all mapped Epic keys
   const targetEpicKeys = Object.keys(epicKeyToUserInputMap);
