@@ -328,3 +328,21 @@
     - [x] 22.1.4 改进 `Layout.tsx` 侧边栏版本显示：改为通过 `chrome.runtime.getManifest()` 动态获取，消除硬编码。
 - [x] **DONE** **22.2 [LOG-01] 初始化 v1.0.4 Release Note**
     - [x] 22.2.1 在 `CHANGELOG.md` 中新增 v1.0.4 占位符。
+
+## 阶段二十三：Jira 管理与工时排期扣减 (Phase 23: Jira Management & Hours Deduction)
+
+### P0 — 核心功能 (Core Features)
+
+- [x] **DONE** **23.1 [JIRA-01] 数据模型与 API 扩展**
+    - [x] 23.1.1 升级 Dexie DB Schema 至 `version(6)`。
+    - [x] 23.1.2 在 `Project` 模型中新增 `devLoggedMd` 和 `testLoggedMd` 字段。
+    - [x] 23.1.3 在 `services/jira.ts` 新增 `syncEpicLoggedHours` 批量拉取逻辑，根据 Issue Type 智能区分研发与测试。
+- [x] **DONE** **23.2 [JIRA-02] UI 交互与路由**
+    - [x] 23.2.1 创建 `JiraSync.tsx` 页面，展示带 Epic Key 的项目并提供一键同步。
+    - [x] 23.2.2 配置路由并在左侧边栏增加「Jira 管理」入口。
+- [x] **DONE** **23.3 [JIRA-03] 排期动态扣减**
+    - [x] 23.3.1 更新 `SchedulingContext.tsx`，在计算 `devGap` 和 `testGap` 时动态扣减已录入工时。
+    - [x] 23.3.2 同样更新大盘仪表盘 (`Dashboard.tsx`)，让可视化审计表也能反映净缺口。
+- [x] **DONE** **23.4 [DOC-01] 文档归档**
+    - [x] 23.4.1 更新 `intelligent-resource-planner.md` 的 3.3.12 章节。
+    - [x] 23.4.2 更新 `CHANGELOG.md` 补充新特性。

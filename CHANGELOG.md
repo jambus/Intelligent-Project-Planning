@@ -2,9 +2,15 @@
 
 ## [1.0.4] - 2026-05-17
 
+### 新特性 (New Features)
+- **Jira 管理模块 (Jira Management Module)**：
+  - **一键同步 Epic 工时**：新增专门的「Jira 管理」侧边栏页面。系统能够自动识别项目中关联的 Jira Epic Key，支持通过一键点击批量调用 Jira REST API (JQL)，拉取对应 Epic 下所有子任务已记录的实际工时 (`timespent`)。
+  - **动态 JQL 查询范围与 POST 查询引擎**：在「系统设置」中新增 Jira 关联项目配置。配置后，系统在拉取 Epic 工时时会在底层 JQL 自动拼接 `project in (...)` 条件，大幅提升查询速度并避免跨项目同名冲突。底层彻底迁移至 `POST /rest/api/3/search/jql`，完全解决了 GET 接口废弃报错以及长 JQL URL 超限问题。
+  - **严格数据校验与智能路由**：底层 JQL 生成引擎增加智能路由逻辑。对于符合标准 Jira Key 格式（`/^[A-Za-z]+-\d+$/`）或纯数字 ID 的输入，系统会同时将其纳入 `parent in (...)` 和 `"Epic Link" in (...)` 进行高精度匹配；而对于被误填的纯中文、项目名称或包含特殊符号的 Epic Name（如 "[COMMON] Security"），系统会自动识别并仅将其送入兼容名称匹配的 `"Epic Link" in (...)` 语句中，在最大限度拉取到工时的同时，**彻底避免触发 Jira API `parent` 字段不支持名称引发的 400 Bad Request 报错**。
+  - **智能工时归类**：自动基于 Jira 任务的 Issue Type (如包含 Test, QA, Bug 等字样) 将同步到的工时精准归类为开发工时 (`devLoggedMd`) 或测试工时 (`testLoggedMd`)。
+  - **排期智能扣减 (Effective MD Scheduling)**：重构了底层的排期审计逻辑。在执行 AI 智能排期前，系统会自动从导入的项目总需求 (Total MD) 中扣减掉这些已经发生的真实工时，确保 AI 仅对剩余的**净需求缺口**进行排期，杜绝资源被重复挤占。
+
 ### 待开发/进行中 (Upcoming/In Progress)
-- **版本初始化 (Version Initialization)**：将系统版本号从 1.0.3 升级至 1.0.4，开启新阶段开发。
-- **UI 增强**：侧边栏版本号显示改为从 Manifest 动态注入，消除硬编码，提升版本维护效率。
 - **排期引擎持续增强**：计划进一步优化资源匹配算法与异常场景下的自动容错逻辑。
 
 ## [1.0.3] - 2026-05-17

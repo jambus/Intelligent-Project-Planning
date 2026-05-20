@@ -5,6 +5,7 @@ import { DEFAULT_SCHEDULING_PROMPT } from '../../services/ai';
 
 export const Settings = () => {
   const [jiraDomain, setJiraDomain] = useState('');
+  const [jiraProjects, setJiraProjects] = useState('');
   const [jiraEmail, setJiraEmail] = useState('');
   const [jiraToken, setJiraToken] = useState('');
   const [openAiKey, setOpenAiKey] = useState('');
@@ -18,6 +19,7 @@ export const Settings = () => {
   useEffect(() => {
     const loadSettings = async () => {
       setJiraDomain(await getStorageItem('jiraDomain') || '');
+      setJiraProjects(await getStorageItem('jiraProjects') || '');
       setJiraEmail(await getStorageItem('jiraEmail') || '');
       setJiraToken(await getStorageItem('jiraApiToken') || '');
       setOpenAiKey(await getStorageItem('openAiApiKey') || '');
@@ -33,6 +35,7 @@ export const Settings = () => {
     setIsSaving(true);
     try {
       await setStorageItem('jiraDomain', jiraDomain);
+      await setStorageItem('jiraProjects', jiraProjects);
       await setStorageItem('jiraEmail', jiraEmail);
       await setStorageItem('jiraApiToken', jiraToken);
       await setStorageItem('openAiApiKey', openAiKey);
@@ -84,6 +87,16 @@ export const Settings = () => {
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   value={jiraDomain} onChange={e => setJiraDomain(e.target.value)}
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">限定抓取的项目范围 (Jira Projects)</label>
+                <input 
+                  type="text" 
+                  placeholder="例如: APP, WEB (多个以逗号分隔)"
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  value={jiraProjects} onChange={e => setJiraProjects(e.target.value)}
+                />
+                <p className="text-xs text-gray-500 mt-1">配置后，拉取 Epic 工时会在底层加上 `project in (...)` 条件，提升查询速度并避免跨项目冲突。留空则全局搜索。</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

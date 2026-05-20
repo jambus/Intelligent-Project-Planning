@@ -166,7 +166,9 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             const md = (workingDays * (a.allocationPercentage || 0)) / 100;
             if (a.allocationType === 'test' || res?.role === '测试工程师') test += md; else dev += md;
           });
-          return { ...p, devGap: Math.max(0, p.devTotalMd - dev), testGap: Math.max(0, p.testTotalMd - test) };
+          const effectiveDevTotal = Math.max(0, (p.devTotalMd || 0) - (p.devLoggedMd || 0));
+          const effectiveTestTotal = Math.max(0, (p.testTotalMd || 0) - (p.testLoggedMd || 0));
+          return { ...p, devGap: Math.max(0, effectiveDevTotal - dev), testGap: Math.max(0, effectiveTestTotal - test) };
         }).filter(p => Math.ceil(p.devGap) >= 1 || Math.ceil(p.testGap) >= 1);
 
         const idle = currentRes.map(r => {
