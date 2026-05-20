@@ -346,3 +346,12 @@
 - [x] **DONE** **23.4 [DOC-01] 文档归档**
     - [x] 23.4.1 更新 `intelligent-resource-planner.md` 的 3.3.12 章节。
     - [x] 23.4.2 更新 `CHANGELOG.md` 补充新特性。
+
+## 阶段二十四：Jira 同步范围时间窗口限制 (Phase 24: Jira Sync Time Window Restriction)
+
+### P0 — 核心功能 (Core Features)
+
+- [ ] **24.1 [JIRA-04] Epic 创建时间过去一年限制**
+    - [ ] 24.1.1 在 `services/jira.ts` 中同步 Epic 详情时，无论是针对标准 Epic Keys（`standardKeys`）还是模糊搜索的 Epic 名称（`fuzzyNames`），JQL 条件中均添加 `created >= -365d` 的限制。
+    - [ ] 24.1.2 执行 `npm run build` 确保无编译错误。
+    - [ ] 24.1.3 更新文档 `docs/intelligent-resource-planner.md`。

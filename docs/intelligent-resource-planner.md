@@ -221,3 +221,5 @@ graph TD
 3. **自定义工时折算率 (Custom Hours Per Man-Day)**：系统支持在设置中动态调整 1 人天等于多少小时（默认 6 小时）。所有从 Jira 拉取到的 `timespent` (秒) 都会按此参数进行转换。
 4. **统一工时聚合 (Unified Hours Logging)**：由于实际场景中 Jira 内很难精准区分开发与测试的工时类型，系统会将拉取到的所有子任务 `timespent` 直接合并为该 Epic 的“已消费总工时 (`totalLoggedMd`)”。
 5. **排期智能扣减 (Dev-First Deduction)**：底层排期引擎（SchedulingContext）升级。在启动大盘 AI 排期或计算需求缺口时，系统会采用“优先扣减开发”的策略：优先使用已消费总工时抵扣项目的原始开发评估 (Dev MD)；如果总工时超出了开发需求，溢出部分则继续抵扣测试需求 (Test MD)。AI 引擎最终只会针对抵扣后的**净缺口 (Effective MD)** 进行智能调度，避免了因项目已进行部分开工而导致全局资源超载。
+6. **创建时间窗口限制 (Creation Window Constraint)**：为了避免历史项目及已归档数据的干扰，并在有重名 Epic 时提高查询与统计的精准度，系统在同步 Epic 信息时只查询从当前时间起，过去一年内创建的那些 Epic。无论是标准 Epic Key 还是模糊搜索匹配出的 Epic Key，都会在底层 JQL 查询中加上 `created >= -365d` 的时间过滤，非近一年创建的 Epic 工时将不会被统计到本排期系统中。
+

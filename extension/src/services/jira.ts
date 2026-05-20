@@ -60,7 +60,11 @@ export const syncJiraIssues = async (projectKey: string): Promise<any> => {
   if (!settings) throw new Error('Jira settings not configured.');
 
   const jql = `project = "${projectKey}" AND statusCategory != Done`;
-  const data = await fetchFromJira(`search?jql=${encodeURIComponent(jql)}&fields=summary,status,assignee,timeoriginalestimate,timespent`, settings);
+  const body = {
+    jql,
+    fields: ['summary', 'status', 'assignee', 'timeoriginalestimate', 'timespent', 'aggregatetimespent', 'timetracking']
+  };
+  const data = await fetchFromJira('search/jql', settings, 'POST', body);
   return data.issues;
 };
 
@@ -115,13 +119,48 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
   }
 
   const epicKeyToUserInputMap: Record<string, string> = {};
-  standardKeys.forEach(k => epicKeyToUserInputMap[k] = k);
 
-  // Step 1: Fuzzy search for Epics by name
+  // Step 1a: Verify standard Epic keys are created within the last year
+  if (standardKeys.length > 0) {
+    const verificationChunkSize = 50;
+    for (let i = 0; i < standardKeys.length; i += verificationChunkSize) {
+      const subChunk = standardKeys.slice(i, i + verificationChunkSize);
+      const subChunkStr = subChunk.map(k => `"${k}"`).join(',');
+      const verifyJql = `${projectJql ? projectJql + ' AND ' : ''}issueKey in (${subChunkStr}) AND issuetype = Epic AND created >= -365d`;
+      
+      let nextPageToken: string | undefined;
+      let hasMore = true;
+      while (hasMore) {
+        const body: Record<string, any> = {
+          jql: verifyJql,
+          maxResults: 100,
+          fields: ['key'],
+        };
+        if (nextPageToken) body.nextPageToken = nextPageToken;
+        
+        try {
+          const data = await fetchFromJira('search/jql', settings, 'POST', body);
+          const epics = data.issues || [];
+          epics.forEach((epic: any) => {
+            if (epic.key) {
+              epicKeyToUserInputMap[epic.key] = epic.key;
+            }
+          });
+          nextPageToken = data.nextPageToken;
+          hasMore = !!nextPageToken;
+        } catch (e) {
+          console.warn("Standard epic verification failed", e);
+          hasMore = false;
+        }
+      }
+    }
+  }
+
+  // Step 1b: Fuzzy search for Epics by name (only created within the last year)
   if (fuzzyNames.length > 0) {
-    let epicSearchJql = `issuetype = Epic`;
+    let epicSearchJql = `issuetype = Epic AND created >= -365d`;
     if (projectJql) {
-       epicSearchJql = `${projectJql} AND issuetype = Epic`;
+       epicSearchJql = `${projectJql} AND issuetype = Epic AND created >= -365d`;
     } else {
        const terms = fuzzyNames.map(name => {
            const safe = name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, ' ').trim().split(' ')[0];
@@ -131,6 +170,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
            epicSearchJql += ` AND (${terms.join(' OR ')})`;
        }
     }
+
 
     let nextPageToken: string | undefined;
     let hasMore = true;
@@ -182,7 +222,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
       const body: Record<string, any> = {
         jql,
         maxResults: 100,
-        fields: ['parent', 'customfield_10014', 'issuetype', 'timespent'],
+        fields: ['parent', 'customfield_10014', 'issuetype', 'timespent', 'aggregatetimespent', 'timetracking', 'summary'],
       };
       if (nextPageToken) body.nextPageToken = nextPageToken;
       
@@ -190,7 +230,13 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
       const issues = data.issues || [];
       
       issues.forEach((issue: any) => {
-        const timeSpentSeconds = issue.fields.timespent || 0;
+        // Fetch time spent from multiple possible locations in the Jira issue fields
+        const timeSpentSeconds = 
+          issue.fields.aggregatetimespent || 
+          issue.fields.timespent || 
+          issue.fields.timetracking?.timeSpentSeconds || 
+          0;
+
         if (timeSpentSeconds <= 0) return;
 
         let actualKey = issue.key;

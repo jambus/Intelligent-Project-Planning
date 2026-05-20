@@ -6,6 +6,7 @@
 - **Jira 管理模块 (Jira Management Module)**：
   - **一键同步 Epic 工时**：新增专门的「Jira 管理」侧边栏页面。系统能够自动识别项目中关联的 Jira Epic Key，支持通过一键点击批量调用 Jira REST API (JQL)，拉取对应 Epic 下所有子任务已记录的实际工时 (`timespent`)。
   - **智能模糊搜索 (Fuzzy Epic Matching)**：不再强制要求输入完整的 Jira Key。如果您在项目中填入了 Epic 的部分名称（如 `COMMON Security`），系统会在配置的 Jira 项目范围内进行智能前缀匹配（Starts With），自动寻找到对应的真实 Epic Key，然后精确拉取该 Epic 下的所有子任务工时。
+  - **工时拉取鲁棒性增强**：针对部分 Jira Cloud 环境下 `timespent` 字段返回为空的问题，新增了对 `aggregatetimespent`（包含子任务的总计工时）和 `timetracking` 对象的深度扫描。系统现在能更全面地捕获已记录的工时，解决了同步后显示为 0 或只返回摘要的 Bug。
   - **动态 JQL 查询范围与 POST 查询引擎**：在「系统设置」中新增 Jira 关联项目配置。配置后，系统在拉取 Epic 工时时会在底层 JQL 自动拼接 `project in (...)` 条件，大幅提升查询速度并避免跨项目同名冲突。底层彻底迁移至 `POST /rest/api/3/search/jql`，完全解决了 GET 接口废弃报错以及长 JQL URL 超限问题。
   - **自定义工时折算率 (Custom Hours Per Man-Day)**：在系统设置中新增了工时折算参数。您可以根据团队的实际情况，自由配置“1 人天 (MD)”等于多少小时（默认 6 小时），系统会自动将拉取到的 `timespent` (秒) 按此比例折算。
   - **严格数据校验与智能路由**：底层 JQL 生成引擎增加智能路由逻辑。对于符合标准 Jira Key 格式的输入直接进入高精度匹配。
