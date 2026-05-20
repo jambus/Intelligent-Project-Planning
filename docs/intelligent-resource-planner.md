@@ -216,11 +216,15 @@ graph TD
 
 #### 3.3.12 Jira 工时同步与动态排期扣减 (Jira Timesheet Sync & Deduction)
 在 v1.0.4 版本中，系统新增了专门的「Jira 管理」模块，实现已发生工作量与未来排期的无缝衔接：
-1. **智能模糊搜索 (Fuzzy Epic Matching)**：对于在系统导入时包含 `jiraEpicKey` 的项目，即使输入的是 Epic 的名称前缀（如 `COMMON Security`），系统也会在设定的项目范围内自动执行两次检索：首先匹配出真正的 Epic Key，然后再精准拉取其下所有子任务的已记录工时 (`timespent`)。在匹配时，系统将智能提取并清洗前缀（自动处理如以中括号括在最前方的 `[PROJ-123]` 格式），支持在 JQL 层面以及内存匹配中进行双向清洗对齐，确保即使格式不一致也能正确匹配上。
+1. **智能模糊搜索 (Fuzzy Epic Matching)**：为了最大程度兼容用户的输入习惯，系统不使用 `issueKey in` 精准查询（因为用户在排期中录入的 Epic Key 并非 Jira 底层的物理 Issue ID，而是写在 Summary 中括号内的业务代号）。系统会将所有输入关键字均归入模糊搜索范围，拼装为 `summary ~ "key*"` 并在设定的项目范围内过滤近一年内创建的 `Epic` 或 `长篇故事`。匹配时，系统会智能清洗中括号等前缀，在内存中进行不区分大小写的 `startsWith` 匹配，从而自动将查到的 Epic Issue Key 映射回用户的输入代号。
 
-2. **动态 JQL 查询范围 (Query Scope)**：用户可在系统设置中配置关联的 Jira Projects（如 `PROJ-A, PROJ-B`）。配置后，系统会自动在底层的工时拉取 JQL 中加上 `project in (...)` 的条件限定，这不仅能显著提升 API 查询速度，还能为名称的模糊搜索划定范围，避免跨项目冲突。
+2. **动态 JQL 查询范围 (Query Scope)**：用户可在系统设置中配置关联的 Jira Projects（如 `PROJ-A, PROJ-B`）。配置后，系统会自动在第一阶段检索 Epic 时加上 `project in (...)` 的条件限定，这能显著提升 API 查询速度。为了防止 Epic 下属的一级子任务跨项目关联而导致工时遗漏，在第二阶段已明确 Epic Key 执行工时聚合时，将不再强制拼接项目限定条件。
 3. **自定义工时折算率 (Custom Hours Per Man-Day)**：系统支持在设置中动态调整 1 人天等于多少小时（默认 6 小时）。所有从 Jira 拉取到的 `timespent` (秒) 都会按此参数进行转换。
-4. **统一工时聚合 (Unified Hours Logging)**：由于实际场景中 Jira 内很难精准区分开发与测试的工时类型，系统会将拉取到的所有子任务 `timespent` 直接合并为该 Epic 的“已消费总工时 (`totalLoggedMd`)”。在「Jira 管理」中，系统将基于此合并工时计算并直观展示「剩余总工时（即原始开发 + 原始测试 - 已消费，最低为 0）」，方便 PM 直观查看项目整体消化情况。
+4. **统一工时聚合与防重防漏机制 (Bilingual Issues Aggregate & Double Counting Prevention)**：由于实际场景中 Jira 内很难精准区分开发与测试的工时类型，系统会将拉取到的所有子任务工时直接合并为该 Epic 的“已消费总工时 (`totalLoggedMd`)”。为了确保统计不重不漏，系统设计了精细的防重机制：
+   * **防止重复计算 (Double Counting Prevention)**：如果 issue 本身为 Epic 节点，系统仅取其单节点工时 (`timespent`/`timeSpentSeconds`)，不取聚合工时 (`aggregatetimespent`)，以防止与其下属的一级子任务（Story/Task）在循环中被重复累加。
+   * **防止子任务工时丢失 (Sub-task Extraction)**：如果 issue 为挂载在 Epic 下的一级子任务（Story/Task），系统将优先读取其聚合工时 (`aggregatetimespent`)。这能将这些 Story 下属的二级子任务 (Sub-task) 上的已记工时也完整统计进来，同时因为二级子任务不直接具备 Epic Link 而不会被 JQL 重复查出，从而确保了工时统计的零误差。
+   在「Jira 管理」中，系统将基于此合并工时计算并直观展示「剩余总工时（即原始开发 + 原始测试 - 已消费，最低为 0）」，方便 PM 直观查看项目整体消化情况。
+
 
 5. **排期智能扣减 (Dev-First Deduction)**：底层排期引擎（SchedulingContext）升级。在启动大盘 AI 排期或计算需求缺口时，系统会采用“优先扣减开发”的策略：优先使用已消费总工时抵扣项目的原始开发评估 (Dev MD)；如果总工时超出了开发需求，溢出部分则继续抵扣测试需求 (Test MD)。AI 引擎最终只会针对抵扣后的**净缺口 (Effective MD)** 进行智能调度，避免了因项目已进行部分开工而导致全局资源超载。
 6. **创建时间窗口限制与中英双语史诗类型兼容 (Creation Window & Epic Type Localization)**：为了避免历史项目及已归档数据的干扰，并在有重名 Epic 时提高匹配精准度，系统在同步 Epic 信息时只查询从当前时间起，过去一年内创建的那些 Epic（在底层的 JQL 查询中均加上 `created >= -365d` 的时间过滤）。同时为了兼容不同语言环境配置下的 Jira，系统支持识别并匹配英文 `Epic` 和中文 `长篇故事` 两种系统默认的史诗类型（在 JQL 中均使用 `issuetype in (Epic, "长篇故事")` 进行限制过滤）。

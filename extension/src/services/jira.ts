@@ -92,20 +92,9 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
   });
 
   const validUserKeys = epicKeys
-    .map(k => k ? k.replace(/['"]/g, '').trim() : '')
+    .map(k => k ? k.toString().replace(/['"]/g, '').trim() : '')
     .filter(k => k !== '');
   if (validUserKeys.length === 0) return result;
-
-  const standardKeys: string[] = [];
-  const fuzzyNames: string[] = [];
-
-  validUserKeys.forEach(k => {
-    if (/^[A-Za-z]+-\d+$/.test(k) || /^\d+$/.test(k)) {
-      standardKeys.push(k);
-    } else {
-      fuzzyNames.push(k);
-    }
-  });
 
   let projectJql = '';
   if (settings.projects) {
@@ -120,70 +109,21 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
 
   const epicKeyToUserInputMap: Record<string, string> = {};
 
-  // Step 1a: Verify standard Epic keys are created within the last year
-  if (standardKeys.length > 0) {
-    const verificationChunkSize = 50;
-    for (let i = 0; i < standardKeys.length; i += verificationChunkSize) {
-      const subChunk = standardKeys.slice(i, i + verificationChunkSize);
-      const subChunkStr = subChunk.map(k => `"${k}"`).join(',');
-      const verifyJql = `${projectJql ? projectJql + ' AND ' : ''}issueKey in (${subChunkStr}) AND issuetype in (Epic, "长篇故事") AND created >= -365d`;
-      
-      let nextPageToken: string | undefined;
-      let hasMore = true;
-      while (hasMore) {
-        const body: Record<string, any> = {
-          jql: verifyJql,
-          maxResults: 100,
-          fields: ['key'],
-        };
-        if (nextPageToken) body.nextPageToken = nextPageToken;
-        
-        try {
-          const data = await fetchFromJira('search/jql', settings, 'POST', body);
-          const epics = data.issues || [];
-          epics.forEach((epic: any) => {
-            if (epic.key) {
-              // Map the standardized Epic Key from Jira (usually uppercase) back to the user's original input key (case-insensitive match)
-              const matchedKey = subChunk.find(k => k.toLowerCase() === epic.key.toLowerCase());
-              if (matchedKey) {
-                epicKeyToUserInputMap[epic.key] = matchedKey;
-              }
-            }
-          });
-          nextPageToken = data.nextPageToken;
-          hasMore = !!nextPageToken;
-        } catch (e) {
-          console.warn("Standard epic verification failed", e);
-          hasMore = false;
-        }
-      }
-    }
-  }
-
-  // Step 1b: Fuzzy search for Epics by name (only created within the last year)
-  if (fuzzyNames.length > 0) {
-    const terms = fuzzyNames.map(name => {
-        // Clean bracket wrappers and extract the main search keyword safely
-        const clean = name.replace(/[\[\]]/g, '').trim();
-        const safe = clean.replace(/[^a-zA-Z0-9\u4e00-\u9fa5\-_]/g, ' ').trim().split(' ')[0];
-        return safe ? `summary ~ "${safe}*"` : '';
-    }).filter(x => x);
-    
-    let termsJql = '';
-    if (terms.length > 0) {
-        termsJql = `(${terms.join(' OR ')})`;
-    }
-
+  // Step 1: Fuzzy search for Epics by name (only created within the last year, bilingual epic types)
+  const terms = validUserKeys.map(name => {
+      // Clean bracket wrappers and extract the main search keyword safely
+      const clean = name.replace(/[\[\]]/g, '').trim();
+      const safe = clean.replace(/[^a-zA-Z0-9\u4e00-\u9fa5\-_]/g, ' ').trim().split(' ')[0];
+      return safe ? `summary ~ "${safe}*"` : '';
+  }).filter(x => x);
+  
+  if (terms.length > 0) {
+    const termsJql = `(${terms.join(' OR ')})`;
     let epicSearchJql = `issuetype in (Epic, "长篇故事") AND created >= -365d`;
     if (projectJql) {
-       epicSearchJql = `${projectJql} AND issuetype in (Epic, "长篇故事") AND created >= -365d`;
-       if (termsJql) {
-           epicSearchJql += ` AND ${termsJql}`;
-       }
+       epicSearchJql = `${projectJql} AND issuetype in (Epic, "长篇故事") AND created >= -365d AND ${termsJql}`;
     } else {
-       if (termsJql) {
-           epicSearchJql += ` AND ${termsJql}`;
-       }
+       epicSearchJql += ` AND ${termsJql}`;
     }
 
     let nextPageToken: string | undefined;
@@ -203,7 +143,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
             const summary = epic.fields.summary || '';
             const cleanSummary = summary.toLowerCase().replace(/^[\[\s]+/, '');
             
-            for (const name of fuzzyNames) {
+            for (const name of validUserKeys) {
                 const cleanName = name.toLowerCase().replace(/^[\[\s]+/, '');
                 
                 // Matches standard start or bracket-wrapped start (e.g. "[PROJ-123] ...")
@@ -232,8 +172,9 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
     const chunkStr = chunk.map(k => `"${k}"`).join(',');
     
     // targetEpicKeys only contains standard Jira keys discovered from Step 1 or provided in standardKeys,
-    // so using 'parent in' and 'issueKey in' is 100% safe.
-    const jql = `${projectJql ? projectJql + ' AND ' : ''}(parent in (${chunkStr}) OR cf[10014] in (${chunkStr}) OR issueKey in (${chunkStr}))`;
+    // so using 'parent in' and 'issueKey in' is 100% safe. We remove projectJql constraint here to avoid
+    // skipping child issues that belong to different projects.
+    const jql = `(parent in (${chunkStr}) OR cf[10014] in (${chunkStr}) OR issueKey in (${chunkStr}))`;
 
     let nextPageToken: string | undefined;
     let hasMore = true;
@@ -250,21 +191,33 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
       const issues = data.issues || [];
       
       issues.forEach((issue: any) => {
-        // Fetch time spent from multiple possible locations in the Jira issue fields
-        const timeSpentSeconds = 
-          issue.fields.aggregatetimespent || 
-          issue.fields.timespent || 
-          issue.fields.timetracking?.timeSpentSeconds || 
-          0;
-
-        if (timeSpentSeconds <= 0) return;
-
         let actualKey = issue.key;
         if (issue.fields.parent && issue.fields.parent.key) {
           actualKey = issue.fields.parent.key;
         } else if (issue.fields.customfield_10014) {
           actualKey = issue.fields.customfield_10014;
         }
+
+        // If the issue is the Epic itself (issue.key === actualKey), 
+        // we MUST use timespent (not aggregatetimespent) to avoid double counting 
+        // the child issues (Stories/Tasks) which are processed separately in this loop.
+        const isEpicItself = issue.key.toLowerCase() === actualKey.toLowerCase();
+        
+        let timeSpentSeconds = 0;
+        if (isEpicItself) {
+          timeSpentSeconds = 
+            issue.fields.timespent || 
+            issue.fields.timetracking?.timeSpentSeconds || 
+            0;
+        } else {
+          timeSpentSeconds = 
+            issue.fields.aggregatetimespent || 
+            issue.fields.timespent || 
+            issue.fields.timetracking?.timeSpentSeconds || 
+            0;
+        }
+
+        if (timeSpentSeconds <= 0) return;
 
         const userInputKey = epicKeyToUserInputMap[actualKey];
         if (userInputKey && result[userInputKey]) {
