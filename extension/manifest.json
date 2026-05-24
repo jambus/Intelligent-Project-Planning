@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Intelligent Resource Planner",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "AI-powered R&D resource scheduling and workload alert system for project management.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw+kPLCbWvcIjORxmMOkVnjYYJuCrT7yiKH5pNbcBdijsx1OTmLLOdpW90YrtKyaSSIJ5VrvYPTIVlOUlsznyVkoY1lNDkbVRvqbQJ1zGETjw1KiABKo+q2whikYy6PbLXxURIpwNvoXInqopINngFlIqYWDW/elN7fRPWX+vRQKExwzFkfL+DGBjGXote/ySGdv54k/mDVS29+FTkn3dRv9YC/QWTZPx5Kgn5L7WAA0aYUeXdUoUkU1cZWClMWipKqSs5Pf7rgh5YuXpQSuClBtaM2+94ZLUMlzGBjaeK9nGBEhfOJcMYIRrIqKlY0raafsYrUzEaXm5RedtDRrErQIDAQAB",
   "permissions": [

@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.0.4] - 2026-05-25
+
+### 新特性 (New Features)
+- **Jira 管理模块 (Jira Management Module)**：
+  - **一键同步 Epic 工时**：新增专门的「Jira 管理」侧边栏页面。系统能够自动识别项目中关联的 Jira Epic Key，支持通过一键点击批量调用 Jira REST API (JQL)，拉取对应 Epic 下所有子任务已记录的实际工时 (`timespent`)。
+  - **智能模糊搜索 (Fuzzy Epic Matching)**：不再强制要求输入完整的 Jira Key。如果您在项目中填入了 Epic 的部分名称（如 `COMMON Security`），系统会在配置的 Jira 项目范围内进行智能前缀匹配（Starts With），自动寻找到对应的真实 Epic Key，然后精确拉取该 Epic 下的所有子任务工时。
+  - **工时拉取鲁棒性增强**：针对部分 Jira Cloud 环境下 `timespent` 字段返回为空的问题，新增了对 `aggregatetimespent`（包含子任务的总计工时）和 `timetracking` 对象的深度扫描。系统现在能更全面地捕获已记录的工时，解决了同步后显示为 0 或只返回摘要的 Bug。
+  - **动态 JQL 查询范围与 POST 查询引擎**：在「系统设置」中新增 Jira 关联项目配置。配置后，系统在拉取 Epic 工时时会在底层 JQL 自动拼接 `project in (...)` 条件，大幅提升查询速度并避免跨项目同名冲突。底层彻底迁移至 `POST /rest/api/3/search/jql`，完全解决了 GET 接口废弃报错以及长 JQL URL 超限问题。
+  - **自定义工时折算率 (Custom Hours Per Man-Day)**：在系统设置中新增了工时折算参数。您可以根据团队的实际情况，自由配置“1 人天 (MD)”等于多少小时（默认 6 小时），系统会自动将拉取到的 `timespent` (秒) 按此比例折算。
+  - **严格数据校验与智能路由**：底层 JQL 生成引擎增加智能路由逻辑。对于符合标准 Jira Key 格式的输入直接进入高精度匹配。
+  - **工时分类统计与精确扣减 (Dev/Test Split Deduction)**：系统新增按 Issue Type 自动分类，将 Epic 下工时分别计入 `devLoggedMd` 与 `testLoggedMd`。支持在系统设置自定义测试类型（默认 Test/QA/Bug/Defect/测试/缺陷），并在排期时按开发/测试缺口精确扣减。
+  - **同步体验增强 (Sync UX Upgrade)**：支持项目勾选同步（全选/反选）、30 分钟内重复同步提醒、上次同步时间展示与同步失败明细列表。
+  - **双重计数防护与多关键词映射**：当 Issue 本身是 Epic 时仅使用 `timespent`，避免与子任务工时重复累加；同一 Epic 命中多个关键词时，工时会同步累加到所有匹配输入键。
+
+### 修复与稳定性 (Fixes & Stability)
+- **修复 Jira 搜索条件损坏 Bug**：修复了模糊搜索 JQL 丢失 `project in (...)`、`*` 通配符与 `created >= -365d` 过滤条件的问题，并恢复批量组合查询模式（所有 Epic Key 一次性传入），保证搜索可返回结果。
+
+### 待开发/进行中 (Upcoming/In Progress)
+- **排期引擎持续增强**：计划进一步优化资源匹配算法与异常场景下的自动容错逻辑。
+
 ## [1.0.3] - 2026-05-17
 
 ### 新特性 (New Features)

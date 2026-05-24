@@ -9,6 +9,7 @@ import { Settings } from './pages/Settings';
 import { Holidays } from './pages/Holidays';
 import { Skills } from './pages/Skills';
 import { ProductOps } from './pages/ProductOps';
+import { JiraSync } from './pages/JiraSync';
 import { SchedulingProvider } from '../context/SchedulingContext';
 import '../index.css';
 
@@ -23,6 +24,7 @@ if (container) {
             <Route path="/" element={<Layout />}>
               <Route index element={<Dashboard />} />
               <Route path="projects" element={<Projects />} />
+              <Route path="jira-sync" element={<JiraSync />} />
               <Route path="resources" element={<Resources />} />
               <Route path="skills" element={<Skills />} />
               <Route path="product-ops" element={<ProductOps />} />

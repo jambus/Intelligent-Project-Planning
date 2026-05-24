@@ -193,7 +193,8 @@ graph TD
 4. **AI 响应鲁棒性校验**：在解析 AI 返回的 JSON 建议时，强制执行 Schema 校验。自动过滤掉 `allocatedMd < 1` 或百分比超出合理范围的非法条目，并对非法结果进行控制台预警，确保了调度结果的数学正确性。
 5. **实时请求中断 (AbortController)**：引入了 `AbortController` 机制。当用户点击“停止排期”时，系统会立即切断正在进行的 fetch 请求并熔断后续的异步处理流，实现了真正的“毫秒级”响应式中断。
 6. **Token 消耗裁剪**：通过对传给 AI 的 `scheduleSummary` 进行长度动态截断（仅保留最近 3 个空闲窗口），在不丢失关键调度信息的前提下，大幅缩减了 Context Window 的 Token 占用。
-7. **工作日集合预计算**：排期启动前一次性预生成窗口内的工作日集合，替代了循环内重复的日期对象创建与判定，进一步压低了 CPU 负载。
+7. **动态并发调度控制 (Dynamic Batch Size)**：底层排期逻辑支持通过系统设置页面动态调节单次发给大模型的「项目并发量 (Batch Size)」。系统在处理包含大量待排期项目时，用户可以通过该参数灵活权衡“排期精度”与“生成耗时”，避免大模型由于处理项目过多而遗漏分配或引发性能降级。
+8. **工作日集合预计算**：排期启动前一次性预生成窗口内的工作日集合，替代了循环内重复的日期对象创建与判定，进一步压低了 CPU 负载。
 
 #### 3.3.9 统一报错反馈机制 (Unified Error Feedback Mechanism)
 为提供更加专业且友好的交互体验，系统封装了标准的 **ErrorModal** 通用组件，并作为全系统的错误处理标准：
@@ -213,3 +214,24 @@ graph TD
 3. **技能自动生成联动**：当用户通过 UI 手动添加或通过 CSV 批量导入新的产品运维配置时，系统会自动检查该产品名称是否存在于“技能管理”字典中。若不存在，系统会自动将其创建为一个新的“业务 (business)”标签，方便项目经理快速为人员打上对应的产品技能标签，消除重复录入的繁琐。
 4. **零 Token 消耗**：PASS 0 完全基于本地策略演算，无需请求大模型 API，在实现复杂业务意图的同时保证了极高的运行效率和零成本。
 5. **可视化大盘区分**：分配给运维任务的人天在全局看板中会以绿色的 `[运维] Product Name` 独立标识，直观区分于正常的业务需求开发。
+
+#### 3.3.12 Jira 工时同步与动态排期扣减 (Jira Timesheet Sync & Deduction)
+在 v1.0.4 版本中，系统新增了专门的「Jira 管理」模块，实现已发生工作量与未来排期的无缝衔接：
+1. **智能精确与模糊融合搜索 (Smart Epic Matching)**：为了最大程度兼容用户的输入习惯，系统会自动判别输入的 Epic Key 格式：
+   * **精确匹配兜底**：如果用户输入的是标准的 Jira Issue Key 格式（如 `PROJ-123`），系统生成的 JQL 会同时包含 `issueKey = "PROJ-123" OR summary ~ "PROJ-123*"` 双重条件，保证绝对不会漏掉标题缺失的 Epic。
+   * **前缀代号模糊查询**：如果用户输入的是业务代号（如 `[PROJ-123]` 或 `PMDP`，通常写在 Epic 标题中括号内），系统会绕过精确 Key 校验，仅使用安全的 `summary ~ "PROJ-123*"` 进行搜索以避免引发 Jira 底层 400 Bad Request 崩溃。
+   * **智能归并聚合**：在匹配阶段，系统会对搜索到的 Epic 标题进行内存级前缀比对（保留 `]` 等特征符进行 `startsWith` 匹配）。若一个代号输入关键字匹配到了多个前缀相同的 Epic，系统会自动将这多个 Epic 节点及其所有子任务的已发生工时进行合并累加统计。
+2. **动态 JQL 查询范围 (Query Scope)**：用户可在系统设置中配置关联的 Jira Projects（如 `PROJ-A, PROJ-B`）。配置后，系统会自动在第一阶段检索 Epic 时加上 `project in (...)` 的条件限定，这能显著提升 API 查询速度。为了防止 Epic 下属的一级子任务跨项目关联而导致工时遗漏，在第二阶段已明确 Epic Key 执行工时聚合时，将不再强制拼接项目限定条件。
+3. **自定义工时折算率 (Custom Hours Per Man-Day)**：系统支持在设置中动态调整 1 人天等于多少小时（默认 6 小时）。所有从 Jira 拉取到的 `timespent` (秒) 都会按此参数进行转换。
+4. **统一工时聚合与防重防漏机制 (Bilingual Issues Aggregate & Double Counting Prevention)**：由于实际场景中 Jira 内很难精准区分开发与测试的工时类型，系统会将拉取到的所有子任务工时直接合并为该 Epic 的“已消费总工时 (`totalLoggedMd`)”。为了确保统计不重不漏，系统设计了精细的防重机制：
+   * **防止重复计算 (Double Counting Prevention)**：如果 issue 本身为 Epic 节点，系统仅取其单节点工时 (`timespent`/`timeSpentSeconds`)，不取聚合工时 (`aggregatetimespent`)，以防止与其下属的一级子任务（Story/Task）在循环中被重复累加。
+   * **防止子任务工时丢失 (Sub-task Extraction)**：如果 issue 为挂载在 Epic 下的一级子任务（Story/Task），系统将优先读取其聚合工时 (`aggregatetimespent`)。这能将这些 Story 下属的二级子任务 (Sub-task) 上的已记工时也完整统计进来，同时因为二级子任务不直接具备 Epic Link 而不会被 JQL 重复查出，从而确保了工时统计的零误差。
+   在「Jira 管理」中，系统将基于此合并工时计算并直观展示「剩余总工时（即原始开发 + 原始测试 - 已消费，最低为 0）」，方便 PM 直观查看项目整体消化情况。
+
+
+5. **排期智能扣减 (Smart Deduction Engine)**：底层排期引擎（SchedulingContext）与大盘展示同步升级，支持基于 Jira Issue Type 的**精准扣减 (Precise Deduction)** 与 **开发优先扣减 (Dev-First Deduction)** 两种模式自适应切换：
+   * **策略 A：精准分类扣减（推荐）**。在系统设置中配置了 `测试 Issue Type 标识` 后，引擎会在同步时将工时精准拆分为 `devLoggedMd` 和 `testLoggedMd`。此时采用无溢出独立扣减公式：`effectiveDevMd = max(0, devTotalMd - devLoggedMd)`，`effectiveTestMd = max(0, testTotalMd - testLoggedMd)`，避免 Dev 超支挤占 Test 评估时间。
+   * **策略 B：Dev-First 扣减（回退）**。若项目无测试专属工时（`testLoggedMd === 0`），系统则默认 Jira 中的工时为统一池，采用优先扣减开发、溢出扣减测试的公式：`effectiveDevMd = max(0, devTotalMd - totalLoggedMd)`，`effectiveTestMd = max(0, testTotalMd - max(0, totalLoggedMd - devTotalMd))`。
+   * AI 引擎最终只会针对抵扣后的**净缺口 (Effective MD)** 进行智能调度，避免了因项目已进行部分开工而导致全局资源超载。该公式在 `SchedulingContext.runAudit()` 和 `Dashboard.runAuditForUI()` 中统一执行。
+6. **创建时间窗口限制与中英双语史诗类型兼容 (Creation Window & Epic Type Localization)**：为了避免历史项目及已归档数据的干扰，并在有重名 Epic 时提高匹配精准度，系统在同步 Epic 信息时只查询从当前时间起，过去一年内创建的那些 Epic（在底层的 JQL 查询中均加上 `created >= -365d` 的时间过滤）。同时为了兼容不同语言环境配置下的 Jira，系统支持识别并匹配英文 `Epic` 和中文 `长篇故事` 两种系统默认的史诗类型（在 JQL 中均使用 `issuetype in (Epic, "长篇故事")` 进行限制过滤）。
+7. **可控增量与同步反馈 (Controlled Sync & Feedback)**：Jira Sync 模块支持项目级别的**选择性同步**，针对大规模项目集，UI 层增加细粒度进度条展示（`已完成 N / 总计 M`），并在同步结束时将各个 Epic 的具体报错信息集中呈现，杜绝黑盒。同时引入同步节流机制，记录每个项目的 `lastJiraSyncAt` 时间戳，当用户尝试同步 30 分钟内已更新的项目时主动预警拦截，防范 Jira API QPS 超限。

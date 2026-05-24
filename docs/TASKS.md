@@ -316,3 +316,91 @@
 - [x] **DONE** **21.5 [DOC-01] 更新 PRD 与 Changelog**
     - [x] 21.5.1 同步 3.3.9 和 3.3.10 章节至 `intelligent-resource-planner.md`。
     - [x] 21.5.2 更新 `CHANGELOG.md` 归档 v1.0.3 变更。
+
+## 阶段二十二：v1.0.4 迭代开启 (Phase 22: Version 1.0.4 Initialization)
+
+### P0 — 版本基座 (Infrastructure)
+
+- [x] **DONE** **22.1 [BUMP-01] 全局版本号升级至 1.0.4**
+    - [x] 22.1.1 更新根目录 `package.json`。
+    - [x] 22.1.2 更新 `extension/package.json` 及其 zip/publish 脚本。
+    - [x] 22.1.3 更新 `extension/manifest.json`。
+    - [x] 22.1.4 改进 `Layout.tsx` 侧边栏版本显示：改为通过 `chrome.runtime.getManifest()` 动态获取，消除硬编码。
+- [x] **DONE** **22.2 [LOG-01] 初始化 v1.0.4 Release Note**
+    - [x] 22.2.1 在 `CHANGELOG.md` 中新增 v1.0.4 占位符。
+
+## 阶段二十三：Jira 管理与工时排期扣减 (Phase 23: Jira Management & Hours Deduction)
+
+### P0 — 核心功能 (Core Features)
+
+- [x] **DONE** **23.1 [JIRA-01] 数据模型与 API 扩展**
+    - [x] 23.1.1 升级 Dexie DB Schema 至 `version(6)`。
+    - [x] 23.1.2 在 `Project` 模型中新增 `devLoggedMd` 和 `testLoggedMd` 字段。
+    - [x] 23.1.3 在 `services/jira.ts` 新增 `syncEpicLoggedHours` 批量拉取逻辑，根据 Issue Type 智能区分研发与测试。
+- [x] **DONE** **23.2 [JIRA-02] UI 交互与路由**
+    - [x] 23.2.1 创建 `JiraSync.tsx` 页面，展示带 Epic Key 的项目并提供一键同步。
+    - [x] 23.2.2 配置路由并在左侧边栏增加「Jira 管理」入口。
+- [x] **DONE** **23.3 [JIRA-03] 排期动态扣减**
+    - [x] 23.3.1 更新 `SchedulingContext.tsx`，在计算 `devGap` 和 `testGap` 时动态扣减已录入工时。
+    - [x] 23.3.2 同样更新大盘仪表盘 (`Dashboard.tsx`)，让可视化审计表也能反映净缺口。
+- [x] **DONE** **23.4 [DOC-01] 文档归档**
+    - [x] 23.4.1 更新 `intelligent-resource-planner.md` 的 3.3.12 章节。
+    - [x] 23.4.2 更新 `CHANGELOG.md` 补充新特性。
+
+## 阶段二十四：Jira 同步范围时间窗口限制 (Phase 24: Jira Sync Time Window Restriction)
+
+### P0 — 核心功能 (Core Features)
+
+- [x] **DONE** **24.1 [JIRA-04] Epic 创建时间过去一年限制**
+    - [x] 24.1.1 在 `services/jira.ts` 的模糊搜索 JQL 中已添加 `created >= -365d` 的限制（第 124-126 行）。当前架构已统一为模糊搜索路径（所有 Epic Key 均通过 `summary ~ "key*"` 查询），不再区分 `standardKeys` 和 `fuzzyNames` 两条路径。
+    - [x] 24.1.2 编译验证通过。
+    - [x] 24.1.3 PRD `docs/intelligent-resource-planner.md` § 3.3.12 第 6 条已包含此功能说明。
+
+## 阶段二十五：Jira 工时扣减与排期逻辑优化 (Phase 25: Jira Hours Deduction & Scheduling Logic Enhancement)
+
+> 来源：2026-05-24 代码审计，关联架构文档：`docs/intelligent-resource-planner.md § 3.3.12`
+
+### P0 — 已完成功能归档 (Completed Features Archive)
+
+- [x] **DONE** **25.1 [JIRA-SYNC] Jira 智能模糊搜索与工时聚合**
+    - [x] 25.1.1 模糊搜索 Epic：通过 `summary ~ "key*"` + `issuetype in (Epic, "长篇故事")` + `created >= -365d` 实现。
+    - [x] 25.1.2 多 Epic 合并累加：同一用户输入关键字匹配多个 Epic 时，自动累加所有子任务工时。
+    - [x] 25.1.3 防重防漏机制：Epic 节点取 `timespent`，子 Issue 取 `aggregatetimespent`，防止重复计算。
+    - [x] 25.1.4 跨项目工时兜底：Phase 2 工时聚合不拼 `project in (...)`，防止跨项目子任务工时遗漏。
+    - [x] 25.1.5 自定义工时折算率：`totalLoggedMd = totalLoggedSeconds / 3600 / hoursPerManDay`（默认 6 小时/天）。
+
+- [x] **DONE** **25.2 [DEDUCTION] Dev-First 排期扣减引擎**
+    - [x] 25.2.1 统一字段模型：使用 `totalLoggedMd` 单一字段（`devLoggedMd`/`testLoggedMd` 已废弃）。
+    - [x] 25.2.2 扣减公式实现：`effectiveDevMd = max(0, devTotalMd - totalLoggedMd)`，溢出扣减测试 `effectiveTestMd = max(0, testTotalMd - max(0, totalLoggedMd - devTotalMd))`。
+    - [x] 25.2.3 排期引擎集成：`SchedulingContext.runAudit()` 在 PASS 1/2/3 中均使用扣减后的净缺口。
+    - [x] 25.2.4 大盘展示对齐：`Dashboard.runAuditForUI()` 使用相同公式，确保展示与排期计算一致。
+
+### P1 — 待优化项 (Planned Improvements)
+
+- [x] **DONE** **25.3 [JIRA-05] 分类工时扣减（按角色区分开发/测试）**
+    - [x] 25.3.1 增加 `jiraTestIssueTypes` 设置项区分 Dev/Test。
+    - [x] 25.3.2 优化 `syncEpicLoggedHours()` 返回精确分离的 `devLoggedMd` 和 `testLoggedMd`。
+    - [x] 25.3.3 更新 `runAudit()` 扣减逻辑：新增无溢出的精确扣减公式，并在无测试工时时回退至 Dev-First 溢出模式。
+
+- [x] **DONE** **25.4 [JIRA-06] 同步进度与错误反馈增强**
+    - [x] 25.4.1 在 JiraSync 页面增加项目维度的批量同步与进度条。
+    - [x] 25.4.2 同步失败时在页面统一汇总展示具体的 Epic Key 与错误原因。
+    - [x] 25.4.3 支持选择性同步，新增 Checkbox 单选与全选。
+
+- [x] **DONE** **25.5 [JIRA-07] 同步数据缓存与增量更新**
+    - [x] 25.5.1 Project 模型新增 `lastJiraSyncAt` 字段，JiraSync 页面展示最近同步时间。
+    - [x] 25.5.2 引入同步频率拦截，30分钟内重复请求给出警告提示，防范 API 超限。
+
+## 阶段二十六：动态排期与模糊匹配兜底 (Phase 26: Dynamic Scheduling & Fuzzy Fallback)
+
+### P0 — 核心能力与健壮性
+
+- [x] **DONE** **26.1 [SCHEDULING-01] 动态并发调度控制 (Dynamic Batch Size)**
+    - [x] 26.1.1 在 `Settings.tsx` 中新增 `aiBatchSize` 配置，默认 3。
+    - [x] 26.1.2 改造 `SchedulingContext.tsx` 动态读取此参数并应用到 `PASS 1` 的 mini-batches 中。
+    - [x] 26.1.3 支持大型团队全局统筹与小型精细排期的动态权衡。
+
+- [x] **DONE** **26.2 [JIRA-08] Jira 模糊/精确双轨智能匹配修正**
+    - [x] 26.2.1 修复正则匹配过度干预问题，使得带有中括号的业务代号（如 `[TRP-123]`）能够回退走安全的 `summary ~ "key*"` 模糊检索，避免引发 Jira API 报错。
+    - [x] 26.2.2 将精确 Issue Key（如纯字母数字 `PROJ-123`）增强为 `issueKey = "PROJ-123" OR summary ~ "PROJ-123*"` 双重匹配，保证 100% 覆盖率。
+    - [x] 26.2.3 恢复内存级标题比对的截断逻辑 `replace(/^[\[\s]+/, '')`，完美适配含右中括号的业务标识。

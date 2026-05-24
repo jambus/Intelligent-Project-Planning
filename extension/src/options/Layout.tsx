@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Settings, FolderKanban, CalendarDays, Tags, Wrench } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, FolderKanban, CalendarDays, Tags, Wrench, RefreshCw } from 'lucide-react';
 
 export const Layout = () => {
   const location = useLocation();
@@ -7,12 +7,17 @@ export const Layout = () => {
   const navItems = [
     { name: '仪表盘', path: '/', icon: <LayoutDashboard size={20} /> },
     { name: '项目管理', path: '/projects', icon: <FolderKanban size={20} /> },
+    { name: 'Jira 管理', path: '/jira-sync', icon: <RefreshCw size={20} /> },
     { name: '人员管理', path: '/resources', icon: <Users size={20} /> },
     { name: '技能管理', path: '/skills', icon: <Tags size={20} /> },
     { name: '产品运维', path: '/product-ops', icon: <Wrench size={20} /> },
     { name: '节假日管理', path: '/holidays', icon: <CalendarDays size={20} /> },
     { name: '系统设置', path: '/settings', icon: <Settings size={20} /> },
   ];
+
+  const version = typeof chrome !== 'undefined' && chrome.runtime?.getManifest 
+    ? chrome.runtime.getManifest().version 
+    : '1.0.4';
 
   return (
     <div className="flex h-screen bg-gray-100 font-sans">
@@ -50,7 +55,7 @@ export const Layout = () => {
           <div className="flex items-center justify-between px-2">
             <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Version</span>
             <span className="text-[10px] font-bold text-blue-400 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-              v1.0.3
+              v{version}
             </span>
           </div>
         </div>
