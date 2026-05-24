@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getStorageItem, setStorageItem } from '../../utils/storage';
 import { Save, RotateCcw } from 'lucide-react';
-import { DEFAULT_SCHEDULING_PROMPT } from '../../services/ai';
+import { DEFAULT_SCHEDULING_PROMPT, DEFAULT_STRATEGY_FOCUSED, DEFAULT_STRATEGY_BALANCED, DEFAULT_STRATEGY_URGENT } from '../../services/ai';
 
 export const Settings = () => {
   const [jiraDomain, setJiraDomain] = useState('');
@@ -15,6 +15,9 @@ export const Settings = () => {
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
   const [aiBatchSize, setAiBatchSize] = useState(3);
   const [aiPromptTemplate, setAiPromptTemplate] = useState('');
+  const [strategyFocused, setStrategyFocused] = useState('');
+  const [strategyBalanced, setStrategyBalanced] = useState('');
+  const [strategyUrgent, setStrategyUrgent] = useState('');
   
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
@@ -34,6 +37,9 @@ export const Settings = () => {
       const savedBatchSize = await getStorageItem('aiBatchSize');
       setAiBatchSize(savedBatchSize ? Number(savedBatchSize) : 3);
       setAiPromptTemplate(await getStorageItem('aiPromptTemplate') || DEFAULT_SCHEDULING_PROMPT);
+      setStrategyFocused(await getStorageItem('strategyFocused') || DEFAULT_STRATEGY_FOCUSED);
+      setStrategyBalanced(await getStorageItem('strategyBalanced') || DEFAULT_STRATEGY_BALANCED);
+      setStrategyUrgent(await getStorageItem('strategyUrgent') || DEFAULT_STRATEGY_URGENT);
     };
     loadSettings();
   }, []);
@@ -53,6 +59,9 @@ export const Settings = () => {
       await setStorageItem('openAiModel', aiModel);
       await setStorageItem('aiBatchSize', aiBatchSize);
       await setStorageItem('aiPromptTemplate', aiPromptTemplate);
+      await setStorageItem('strategyFocused', strategyFocused);
+      await setStorageItem('strategyBalanced', strategyBalanced);
+      await setStorageItem('strategyUrgent', strategyUrgent);
       
       setMessage({ type: 'success', text: '设置已保存成功！' });
     } catch (err) {
@@ -66,6 +75,9 @@ export const Settings = () => {
   const handleResetPrompt = () => {
     if (confirm('确定要重置排期策略为默认规则吗？')) {
       setAiPromptTemplate(DEFAULT_SCHEDULING_PROMPT);
+      setStrategyFocused(DEFAULT_STRATEGY_FOCUSED);
+      setStrategyBalanced(DEFAULT_STRATEGY_BALANCED);
+      setStrategyUrgent(DEFAULT_STRATEGY_URGENT);
     }
   };
 
@@ -212,18 +224,48 @@ export const Settings = () => {
                 <span>恢复默认规则</span>
               </button>
             </div>
-            <div className="space-y-2">
-              <p className="text-xs text-gray-500 mb-2 leading-relaxed">
-                您可以自由编辑下方的 Prompt 模板来改变 AI 的排期决策准则。
-                请保留 <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{phase}}"}</code> 和 <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{strategyInstruction}}"}</code> 这两个核心占位符。
-              </p>
-              <textarea 
-                rows={15}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">单人模式 (专注模式)</label>
+                <textarea 
+                  rows={2}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono text-xs text-gray-700 leading-relaxed bg-gray-50"
+                  value={strategyFocused}
+                  onChange={e => setStrategyFocused(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">均衡模式</label>
+                <textarea 
+                  rows={2}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono text-xs text-gray-700 leading-relaxed bg-gray-50"
+                  value={strategyBalanced}
+                  onChange={e => setStrategyBalanced(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">进阶模式 (紧急模式)</label>
+                <textarea 
+                  rows={2}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono text-xs text-gray-700 leading-relaxed bg-gray-50"
+                  value={strategyUrgent}
+                  onChange={e => setStrategyUrgent(e.target.value)}
+                />
+              </div>
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-xs text-gray-500 mb-2 leading-relaxed font-bold">系统主提示词模板 (Prompt Template)</p>
+                <p className="text-xs text-gray-500 mb-2 leading-relaxed">
+                  您可以自由编辑下方的 Prompt 模板来改变 AI 的排期决策准则。
+                  请保留 <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{phase}}"}</code>、<code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{strategyFocused}}"}</code>、<code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{strategyBalanced}}"}</code> 和 <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{strategyUrgent}}"}</code> 等核心占位符。
+                </p>
+                <textarea 
+                  rows={15}
                 className="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono text-xs text-gray-700 leading-relaxed bg-gray-50"
                 value={aiPromptTemplate}
                 onChange={e => setAiPromptTemplate(e.target.value)}
               />
             </div>
+          </div>
           </div>
 
           {/* Actions */}

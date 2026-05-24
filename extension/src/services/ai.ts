@@ -6,6 +6,10 @@ export interface AISettings {
   baseUrl: string;
 }
 
+export const DEFAULT_STRATEGY_FOCUSED = 'Assign the project to a single person as much as possible. If a Tech Lead or Quality Lead is specified, they MUST be the sole assignee taking 100% allocation.';
+export const DEFAULT_STRATEGY_BALANCED = 'Form a balanced team. Include the specified Tech Lead and Quality Lead along with other available developers/testers, typically at 50% allocation to allow concurrent work on multiple projects.';
+export const DEFAULT_STRATEGY_URGENT = 'Max out allocations to finish the project as early as possible within the expected start and end dates. Prioritize 100% or higher allocation.';
+
 export const DEFAULT_SCHEDULING_PROMPT = `YOUR TASK:
 Match the best resources to fulfill the {{phase}} gaps for a BATCH of projects.
 
@@ -13,21 +17,21 @@ CRITICAL INSTRUCTIONS:
 1. MANDATORY LEADS: If a project has a named "projectTechLead" (for Dev) or "projectQualityLead" (for Test), you MUST assign that specific person to the project if they appear in the Candidate Resources and have "idleMd" > 0.
    - For Leads, prefer a high "allocationPercentage" (e.g., 50% or 100%) to ensure they are properly involved.
 2. PER-PROJECT SCHEDULING STRATEGY: Each project in the batch has a "schedulingStrategy" field. You MUST strictly follow it:
-   - "balanced": Prefer 50% allocation to allow resources to work on multiple projects concurrently.
-   - "focused": Prefer 100% allocation for one project at a time.
-   - "urgent": Prioritize 100% or more allocation to finish the project as early as possible.
+   - "focused" (单人模式): {{strategyFocused}}
+   - "balanced" (均衡模式): {{strategyBalanced}}
+   - "urgent" (进阶模式): {{strategyUrgent}}
 3. SKILL-BASED MATCHING: Use "techStack", "domain", and especially "detailsProductDevMd" / "detailsProductTestMd" to match resources with the right "skills".
    - Priority: Match person's skills to the specific products/tasks mentioned in the project details.
-3. MAXIMIZE UTILIZATION: You MUST allocate ALL available "idleMd" across ALL candidate resources. 
-4. MINIMAL FRAGMENTATION & SINGLE PROJECT PER WEEK: 
+4. MAXIMIZE UTILIZATION: You MUST allocate ALL available "idleMd" across ALL candidate resources. 
+5. MINIMAL FRAGMENTATION & SINGLE PROJECT PER WEEK: 
    - A resource can ONLY be assigned to ONE project per week. Do not fragment their time across multiple projects in the same week.
    - MINIMUM ALLOCATION UNIT: Each assignment MUST be at least 3 days (if the project gap and resource idleMd allow).
-5. NO WASTE: Leaving a resource with idleMd > 0 when projects still have gaps is a FAILURE. 
-6. {{skillRule}}
-7. Phase rules:
+6. NO WASTE: Leaving a resource with idleMd > 0 when projects still have gaps is a FAILURE. 
+7. {{skillRule}}
+8. Phase rules:
    - If phase is 'dev', only assign Developers (前端/后端/APP/全栈).
    - If phase is 'test', only assign Testers (测试工程师). Testing can start as early as the same day as development, but MUST NOT start before development.
-8. Provide "allocatedMd" (integer >= 1) and "allocationPercentage".
+9. Provide "allocatedMd" (integer >= 1) and "allocationPercentage".
 
 Return ONLY a JSON Array with this exact format (do not wrap in markdown blocks, raw JSON only):
 [{"projectId": 1, "resourceId": 1, "targetGap": "{{phase}}", "allocatedMd": 5, "allocationPercentage": 100, "reason": "Reason..."}]`;
@@ -128,9 +132,16 @@ export const suggestAllocationsForBatch = async (
     : 'STRICT MATCHING: Match skills to project Tech Stack/Domain first.';
 
   const customPromptTemplate = await getStorageItem<string>('aiPromptTemplate') || DEFAULT_SCHEDULING_PROMPT;
+  const promptFocused = await getStorageItem<string>('strategyFocused') || DEFAULT_STRATEGY_FOCUSED;
+  const promptBalanced = await getStorageItem<string>('strategyBalanced') || DEFAULT_STRATEGY_BALANCED;
+  const promptUrgent = await getStorageItem<string>('strategyUrgent') || DEFAULT_STRATEGY_URGENT;
+  
   const resolvedPromptRules = customPromptTemplate
     .replace(/\{\{phase\}\}/g, phase)
-    .replace(/\{\{skillRule\}\}/g, skillRule);
+    .replace(/\{\{skillRule\}\}/g, skillRule)
+    .replace(/\{\{strategyFocused\}\}/g, promptFocused)
+    .replace(/\{\{strategyBalanced\}\}/g, promptBalanced)
+    .replace(/\{\{strategyUrgent\}\}/g, promptUrgent);
 
   const systemMsg = `You are an expert resource allocation optimizer.
 Mode: ${isRelaxed ? 'MAX UTILIZATION' : 'PRECISION MATCHING'}.

@@ -73,16 +73,14 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
         const priorityStr = idxPriority !== -1 ? row[idxPriority]?.toString() || 'Medium' : 'Medium';
         const devTotalMd = idxDevMd !== -1 ? Number(row[idxDevMd]) || 0 : 0;
         const testTotalMd = idxTestMd !== -1 ? Number(row[idxTestMd]) || 0 : 0;
-        const totalMd = devTotalMd + testTotalMd;
         const isHighPriority = getPriorityWeight(priorityStr) >= 3;
-        const isLargeProject = totalMd > 10; // User specified <=10 means single mode. So >10 means balanced if high priority.
-        // If high priority and not a small project, use balanced. Otherwise focused.
-        // Wait, user said: "高优先级的项目：会采用均衡模式来排。低优先级的项目，或者工时比较小的项目：会采用单人模式来排"
-        // So small project (<=10) -> focused.
-        // Low priority (<3) -> focused.
-        // Others (High priority AND >10) -> balanced.
+        // User specified: Dev MD <= 10 means single mode (focused).
+        // High priority and Dev MD > 10 means balanced.
+        // Others (e.g. low priority and Dev MD > 10) also fallback to focused.
+        const isLargeDevProject = devTotalMd > 10; 
+        
         let defaultStrategy: 'balanced' | 'focused' | 'urgent' = 'focused';
-        if (isHighPriority && isLargeProject) {
+        if (isHighPriority && isLargeDevProject) {
           defaultStrategy = 'balanced';
         }
         
