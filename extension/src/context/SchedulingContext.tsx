@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, type ReactNode, useRef } from 'react';
 import { db } from '../db';
 import { suggestAllocationsForBatch, type AIMicroAllocation, type SchedulingStrategy } from '../services/ai';
-import { calculateEndDate, isWorkingDay, isValidDateStr, getWorkingDays } from '../utils/dateUtils';
+import { calculateEndDate, isWorkingDay, isValidDateStr, getWorkingDays, getWeekNumber, getISOWeekYear } from '../utils/dateUtils';
 import { getStorageItem } from '../utils/storage';
 
 interface SchedulingContextType {
@@ -29,6 +29,9 @@ interface DailySlot {
   totalCapacity: number;
   usedCapacity: number;
   available: number;
+  weekYear: number;
+  weekNumber: number;
+  assignedNonOpProjects: Set<number>;
 }
 
 export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
@@ -50,14 +53,17 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const getAvailableWindows = (calendar: DailySlot[]) => {
-    const windows: { from: string, to: string, dailyAvailable: number }[] = [];
+    const windows: { from: string, to: string, dailyAvailable: number, assigned: number[], assignedStr: string }[] = [];
     if (calendar.length === 0) return windows;
     let currentWindow: any = null;
     calendar.forEach(slot => {
       if (slot.available >= 1) {
-        if (!currentWindow || currentWindow.dailyAvailable !== slot.available) {
+        const assignedArray = Array.from(slot.assignedNonOpProjects);
+        const assignedStr = assignedArray.join(',');
+        
+        if (!currentWindow || currentWindow.dailyAvailable !== slot.available || currentWindow.assignedStr !== assignedStr) {
           if (currentWindow) windows.push(currentWindow);
-          currentWindow = { from: slot.date, to: slot.date, dailyAvailable: slot.available };
+          currentWindow = { from: slot.date, to: slot.date, dailyAvailable: slot.available, assigned: assignedArray, assignedStr };
         } else {
           currentWindow.to = slot.date;
         }
@@ -124,6 +130,8 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         let current = new Date(rangeStart);
         while (current <= rangeEnd) {
           const dateStr = current.toISOString().split('T')[0];
+          const weekYear = getISOWeekYear(current);
+          const weekNumber = getWeekNumber(current);
           if (workingDaySet.has(dateStr)) {
             let used = 0;
             currentAllocs.filter(a => Number(a.resourceId) === Number(res.id)).forEach(a => {
@@ -135,11 +143,35 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
               date: dateStr,
               totalCapacity: res.capacity,
               usedCapacity: used,
-              available: Math.max(0, res.capacity - used)
+              available: Math.max(0, res.capacity - used),
+              weekYear,
+              weekNumber,
+              assignedNonOpProjects: new Set<number>()
             });
           }
           current.setDate(current.getDate() + 1);
         }
+        
+        // Populate assignedNonOpProjects for the whole week
+        currentAllocs.filter(a => Number(a.resourceId) === Number(res.id)).forEach(a => {
+          if (a.projectId > 0) {
+            calendar.forEach(slot => {
+              const aStart = new Date(a.startDate);
+              const aEnd = new Date(a.endDate);
+              const sDate = new Date(aStart > new Date(rangeStart) ? aStart : rangeStart);
+              const eDate = new Date(aEnd < new Date(rangeEnd) ? aEnd : rangeEnd);
+              let curr = new Date(sDate);
+              while (curr <= eDate) {
+                if (getISOWeekYear(curr) === slot.weekYear && getWeekNumber(curr) === slot.weekNumber) {
+                  slot.assignedNonOpProjects.add(a.projectId);
+                  break;
+                }
+                curr.setDate(curr.getDate() + 1);
+              }
+            });
+          }
+        });
+        
         sharedMatrix.set(res.id, calendar);
         return calendar;
       };
@@ -152,6 +184,18 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
                slot.usedCapacity += newAlloc.allocationPercentage;
                const res = resources.find(r => r.id === resId);
                slot.available = Math.max(0, (res?.capacity || 100) - slot.usedCapacity);
+            }
+            if (newAlloc.projectId > 0) {
+              const aStart = new Date(newAlloc.startDate);
+              const aEnd = new Date(newAlloc.endDate);
+              let curr = new Date(aStart);
+              while (curr <= aEnd) {
+                if (getISOWeekYear(curr) === slot.weekYear && getWeekNumber(curr) === slot.weekNumber) {
+                  slot.assignedNonOpProjects.add(newAlloc.projectId);
+                  break;
+                }
+                curr.setDate(curr.getDate() + 1);
+              }
             }
           });
         }
@@ -190,11 +234,17 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           const idleMd = calendar.reduce((sum, slot) => sum + (slot.available / 100), 0);
           const capacityMd = calendar.length * (r.capacity / 100);
           const utilization = capacityMd > 0 ? ((capacityMd - idleMd) / capacityMd) * 100 : 0;
-          const summary = availableWindows.map(w => `${w.from}~${w.to} (${w.dailyAvailable}%)`).join(', ');
+          const summary = availableWindows.map(w => {
+            const exclusive = w.assigned.length > 0 ? ` [Only Proj ${w.assigned.join(',')}]` : '';
+            return `${w.from}~${w.to} (${w.dailyAvailable}%)${exclusive}`;
+          }).join(', ');
           
           let finalSummary = summary ? `Free Slots: ${summary}` : 'Full';
           if (finalSummary.length > 200 && availableWindows.length > 3) {
-             finalSummary = `Free Slots: ${availableWindows.slice(-3).map(w => `${w.from}~${w.to} (${w.dailyAvailable}%)`).join(', ')}`;
+             finalSummary = `Free Slots: ${availableWindows.slice(-3).map(w => {
+               const exclusive = w.assigned.length > 0 ? ` [Only Proj ${w.assigned.join(',')}]` : '';
+               return `${w.from}~${w.to} (${w.dailyAvailable}%)${exclusive}`;
+             }).join(', ')}`;
           }
           
           return { ...r, idleMd, utilization, scheduleSummary: finalSummary };
@@ -203,11 +253,20 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         return { gaps, idle };
       };
 
-      const findEarliestFitDate = (resourceId: number, currentAllocs: any[], defaultStartDate: string, percentage: number, resources: any[]) => {
+      const findEarliestFitDate = (resourceId: number, currentAllocs: any[], defaultStartDate: string, percentage: number, resources: any[], projectId: number) => {
         const res = resources?.find(r => Number(r.id) === Number(resourceId));
         if (!res) return "9999-12-31";
         const calendar = getResourceCalendar(res, currentAllocs);
-        const fit = calendar.find(slot => slot.date >= defaultStartDate && slot.available >= percentage);
+        const fit = calendar.find(slot => {
+          if (slot.date < defaultStartDate) return false;
+          if (slot.available < percentage) return false;
+          if (projectId > 0) {
+            if (slot.assignedNonOpProjects.size > 0 && !slot.assignedNonOpProjects.has(projectId)) {
+              return false;
+            }
+          }
+          return true;
+        });
         return fit ? fit.date : "9999-12-31";
       };
 
@@ -259,10 +318,42 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             const perc = sug.allocationPercentage || 100;
             let start = isValidDateStr(project.startDate) ? project.startDate! : defaultStart;
             if (phase === 'test') start = calculateTestStartDate(project.id!, currentAllocations, start);
-            const startDate = findEarliestFitDate(resource.id!, currentAllocations, start, perc, resources);
+            const startDate = findEarliestFitDate(resource.id!, currentAllocations, start, perc, resources, project.id!);
             if (startDate > scheduleMaxDate) continue;
             
             let endDate = calculateEndDate(startDate, exactFinalMd, perc);
+            
+            // To prevent a task from crossing week boundary into an illegally occupied week, 
+            // we should ideally truncate it, but calculateEndDate handles working days.
+            // For now, if we assign it, the updateResourceCalendar will mark the occupied weeks.
+            // If it crosses into a week occupied by ANOTHER project, we need to stop it.
+            // Let's truncate endDate if it hits a week occupied by another project.
+            let curr = new Date(startDate);
+            const eDate = new Date(endDate);
+            let truncatedDate = endDate;
+            const resCalendar = getResourceCalendar(resource, currentAllocations);
+            
+            while (curr <= eDate) {
+              const dStr = curr.toISOString().split('T')[0];
+              const slot = resCalendar.find(s => s.date === dStr);
+              if (slot && slot.assignedNonOpProjects.size > 0 && !slot.assignedNonOpProjects.has(project.id!)) {
+                // Hitting a boundary of another project! Truncate right before this.
+                let prev = new Date(curr);
+                prev.setDate(prev.getDate() - 1);
+                truncatedDate = prev.toISOString().split('T')[0];
+                break;
+              }
+              curr.setDate(curr.getDate() + 1);
+            }
+            
+            endDate = truncatedDate;
+            if (endDate < startDate) continue; // Cannot even schedule 1 day
+            
+            // Recalculate exactFinalMd based on potentially truncated endDate
+            const actualWorkingDays = getWorkingDays(new Date(startDate), new Date(endDate), workingDaySet);
+            const actualMd = Math.min((actualWorkingDays * perc) / 100, exactFinalMd);
+            if (actualMd < 1) continue;
+
             if (endDate > scheduleMaxDate) endDate = scheduleMaxDate;
             const allocToSave = { 
               resourceId: resource.id!, 
@@ -279,11 +370,11 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
               allocationPercentage: Math.round(perc)
             } as any);
             count++;
-            totalAllocatedThisSession += exactFinalMd;
+            totalAllocatedThisSession += actualMd;
             
             updateResourceCalendar(resource.id!, allocToSave);
-            if (phase === 'dev') pGap.devGap -= exactFinalMd; else pGap.testGap -= exactFinalMd;
-            rIdle.idleMd -= exactFinalMd;
+            if (phase === 'dev') pGap.devGap -= actualMd; else pGap.testGap -= actualMd;
+            rIdle.idleMd -= actualMd;
           }
         }
         console.groupEnd();

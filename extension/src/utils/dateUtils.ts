@@ -130,3 +130,84 @@ export const calculateEndDate = (startDateStr: string, mdNeeded: number, percent
   return current.toISOString().split('T')[0];
 };
 
+/**
+ * Get ISO week number
+ */
+export const getWeekNumber = (date: Date): number => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+};
+
+/**
+ * Get ISO week year
+ */
+export const getISOWeekYear = (date: Date): number => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  return d.getUTCFullYear();
+};
+
+/**
+ * Get all weeks within a given month range
+ */
+export const getWeeksInRange = (startMonth: number, endMonth: number, year: number): { year: number, week: number, label: string, month: number }[] => {
+  const start = new Date(year, startMonth - 1, 1);
+  const end = new Date(year, endMonth, 0);
+  
+  const weeks: { year: number, week: number, label: string, month: number }[] = [];
+  const current = new Date(start);
+  
+  while (current <= end) {
+    const wYear = getISOWeekYear(current);
+    const wNum = getWeekNumber(current);
+    const label = `W${wNum.toString().padStart(2, '0')}`;
+    
+    if (!weeks.some(w => w.year === wYear && w.week === wNum)) {
+      const jan4 = new Date(wYear, 0, 4);
+      const day = jan4.getDay() || 7;
+      const weekStart = new Date(jan4);
+      weekStart.setDate(jan4.getDate() - day + 1 + (wNum - 1) * 7);
+      
+      weeks.push({ year: wYear, week: wNum, label, month: weekStart.getMonth() + 1 });
+    }
+    
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return weeks;
+};
+
+/**
+ * Calculate allocated man-days for a specific week
+ */
+export const calculateWeeklyMD = (
+  allocationStart: string,
+  allocationEnd: string,
+  percentage: number,
+  weekYear: number,
+  weekNumber: number
+): number => {
+  const start = new Date(allocationStart);
+  const end = new Date(allocationEnd);
+  
+  const jan4 = new Date(weekYear, 0, 4);
+  const day = jan4.getDay() || 7; // 1-7
+  const weekStart = new Date(jan4);
+  weekStart.setDate(jan4.getDate() - day + 1 + (weekNumber - 1) * 7);
+  
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  
+  const overlapStart = start > weekStart ? start : weekStart;
+  const overlapEnd = end < weekEnd ? end : weekEnd;
+  
+  if (overlapStart > overlapEnd) return 0;
+  
+  const workingDays = getWorkingDays(overlapStart, overlapEnd);
+  return (workingDays * percentage) / 100;
+};
+

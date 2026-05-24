@@ -15,8 +15,8 @@ CRITICAL INSTRUCTIONS:
 2. SKILL-BASED MATCHING: Use "techStack", "domain", and especially "detailsProductDevMd" / "detailsProductTestMd" to match resources with the right "skills".
    - Priority: Match person's skills to the specific products/tasks mentioned in the project details.
 3. MAXIMIZE UTILIZATION: You MUST allocate ALL available "idleMd" across ALL candidate resources. 
-4. MINIMAL FRAGMENTATION: DO NOT split a single project into many tiny 1-2 day chunks across different people. 
-   - A project should ideally have 1-2 primary owners. 
+4. MINIMAL FRAGMENTATION & SINGLE PROJECT PER WEEK: 
+   - A resource can ONLY be assigned to ONE project per week. Do not fragment their time across multiple projects in the same week.
    - MINIMUM ALLOCATION UNIT: Each assignment MUST be at least 3 days (if the project gap and resource idleMd allow).
 5. NO WASTE: Leaving a resource with idleMd > 0 when projects still have gaps is a FAILURE. 
 6. {{skillRule}}

@@ -3,9 +3,16 @@
 ## [1.0.5] - 2026-05-25
 
 ### 新特性 (New Features)
-- **版本迭代开启 (Version 1.0.5 Initialization)**：
-  - 开始 1.0.5 版本的开发与演进。
+- **周级别粒度排期大盘 (Weekly Granularity Dashboard)**：
+  - **双层多级表头视图**：将原先粗粒度的“月份”表头升级为“按月统领，按自然周细分”（例如 5 月统领 W18, W19, W20...）的立体双层大盘结构，显著提升排期可见度。
+  - **精准折算周投入**：底层时间换算逻辑（`calculateWeeklyMD`）按标准的 ISO 8601 周与实际工作日完美对齐，能精准计算人员在该自然周内的工时。
+- **排期呈现重构与聚合折叠 (Allocation UI Aggregation)**：
+  - 彻底解决了同一人员在同一项目由于多段碎排期而被拆散成数行堆叠的界面冗余。现在底层渲染时会按 `(人员, 项目)` 组合键强制聚合，跨越多周的碎片投入只用一行纵向平铺呈现。起止时间和投入占比会按宏观范围汇总展示。
 
+### 核心引擎与架构 (Core Engine & Architecture)
+- **硬性“单周单项目”独占分配 (Single Project Per Week Constraint)**：
+  - **引擎底层级拦截**：在生成候选人的排期日历槽（`getResourceCalendar`）阶段，增加了周维度的跨天穿透检查。任何员工（运维以外）一旦在某一周（比如 W20）被分配了一个核心业务需求，他在该周即便还有充足的人天产能，对其它所有平行需求也将被强制置为「0 产能封锁」。
+  - **LLM 意图控制**：同步强化了大语言模型 (LLM) 的 AI Prompt 约束指令，明确声明：`A resource can ONLY be assigned to ONE project per week. Do not fragment their time across multiple projects in the same week.` 提升其给出的建议的一次性命中率与合法性。
 ## [1.0.4] - 2026-05-25
 
 ### 新特性 (New Features)
