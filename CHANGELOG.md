@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.5] - 2026-05-25
+
+### 新特性 (New Features)
+- **版本迭代开启 (Version 1.0.5 Initialization)**：
+  - 开始 1.0.5 版本的开发与演进。
+
 ## [1.0.4] - 2026-05-25
 
 ### 新特性 (New Features)
