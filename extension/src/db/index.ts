@@ -24,8 +24,9 @@ export interface Project {
   devTotalMd: number; // Dev Total MD (开发评估总天数)
   testTotalMd: number; // Test Total MD (测试评估总天数)
   totalLoggedMd?: number; // Synced Total Logged MD from Jira (Total Consumed)
-  devLoggedMd?: number; // Synced Dev Logged MD from Jira (Deprecated)
-  testLoggedMd?: number; // Synced Test Logged MD from Jira (Deprecated)
+  devLoggedMd?: number; // Synced Dev Logged MD from Jira
+  testLoggedMd?: number; // Synced Test Logged MD from Jira
+  lastJiraSyncAt?: number; // Timestamp of last successful Jira sync
   projectTechLead?: string; // Project Tech Lead
   projectQualityLead?: string; // Project Quality Lead
   detailsProductDevMd?: string; // Details Product DEV MD

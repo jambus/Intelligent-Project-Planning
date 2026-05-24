@@ -6,6 +6,7 @@ interface JiraSettings {
   apiToken: string;
   projects?: string;
   hoursPerDay?: number;
+  testIssueTypes?: string;
 }
 
 export const getJiraSettings = async (): Promise<JiraSettings | null> => {
@@ -15,9 +16,10 @@ export const getJiraSettings = async (): Promise<JiraSettings | null> => {
   const projects = await getStorageItem<string>('jiraProjects');
   const hoursPerDayStr = await getStorageItem<string>('jiraHoursPerDay');
   const hoursPerDay = hoursPerDayStr ? Number(hoursPerDayStr) : 6;
+  const testIssueTypes = await getStorageItem<string>('jiraTestIssueTypes') || 'Test,QA,Bug,Defect,测试,缺陷';
 
   if (!domain) return null;
-  return { domain, email: email || '', apiToken: apiToken || '', projects: projects || '', hoursPerDay };
+  return { domain, email: email || '', apiToken: apiToken || '', projects: projects || '', hoursPerDay, testIssueTypes };
 };
 
 const fetchFromJira = async (endpoint: string, settings: JiraSettings, method: string = 'GET', body?: any) => {
@@ -71,6 +73,8 @@ export const syncJiraIssues = async (projectKey: string): Promise<any> => {
 export interface EpicHours {
   epicKey: string;
   totalLoggedMd: number;
+  devLoggedMd: number;
+  testLoggedMd: number;
 }
 
 /**
@@ -88,13 +92,24 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
 
   const result: Record<string, EpicHours> = {};
   epicKeys.forEach(key => {
-    if (key) result[key] = { epicKey: key, totalLoggedMd: 0 };
+    if (key) result[key] = { epicKey: key, totalLoggedMd: 0, devLoggedMd: 0, testLoggedMd: 0 };
   });
 
   const validUserKeys = epicKeys
     .map(k => k ? k.toString().replace(/['"]/g, '').trim() : '')
     .filter(k => k !== '');
   if (validUserKeys.length === 0) return result;
+
+  const standardKeys: string[] = [];
+  const fuzzyNames: string[] = [];
+
+  validUserKeys.forEach(k => {
+    if (/^[A-Za-z]+-\d+$/.test(k) || /^\d+$/.test(k)) {
+      standardKeys.push(k);
+    } else {
+      fuzzyNames.push(k);
+    }
+  });
 
   let projectJql = '';
   if (settings.projects) {
@@ -107,23 +122,78 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
     }
   }
 
-  const epicKeyToUserInputMap: Record<string, string> = {};
+  // One physical Epic key can map to MULTIPLE user input keywords (e.g. Epic "[PMDP]..."
+  // matches both user inputs "PMD" and "PMDP"). Hours are accumulated to ALL matched user keys.
+  const epicKeyToUserInputs: Record<string, string[]> = {};
 
-  // Step 1: Fuzzy search for Epics by name (only created within the last year, bilingual epic types)
-  const terms = validUserKeys.map(name => {
-      // Clean bracket wrappers and extract the main search keyword safely
-      const clean = name.replace(/[\[\]]/g, '').trim();
-      const safe = clean.replace(/[^a-zA-Z0-9\u4e00-\u9fa5\-_]/g, ' ').trim().split(' ')[0];
-      return safe ? `summary ~ "${safe}*"` : '';
-  }).filter(x => x);
-  
-  if (terms.length > 0) {
-    const termsJql = `(${terms.join(' OR ')})`;
+  // Step 1a: Verify standard Epic keys
+  if (standardKeys.length > 0) {
+    const verificationChunkSize = 50;
+    for (let i = 0; i < standardKeys.length; i += verificationChunkSize) {
+      const subChunk = standardKeys.slice(i, i + verificationChunkSize);
+      const subChunkStr = subChunk.map(k => `"${k}"`).join(',');
+      const verifyJql = `${projectJql ? projectJql + ' AND ' : ''}issueKey in (${subChunkStr}) AND issuetype in (Epic, "长篇故事") AND created >= -365d`;
+      
+      let nextPageToken: string | undefined;
+      let hasMore = true;
+      while (hasMore) {
+        const body: Record<string, any> = {
+          jql: verifyJql,
+          maxResults: 100,
+          fields: ['key'],
+        };
+        if (nextPageToken) body.nextPageToken = nextPageToken;
+        
+        try {
+          const data = await fetchFromJira('search/jql', settings, 'POST', body);
+          const epics = data.issues || [];
+          epics.forEach((epic: any) => {
+            if (epic.key) {
+              const matchedKey = subChunk.find(k => k.toLowerCase() === epic.key.toLowerCase());
+              if (matchedKey) {
+                if (!epicKeyToUserInputs[epic.key]) {
+                  epicKeyToUserInputs[epic.key] = [];
+                }
+                if (!epicKeyToUserInputs[epic.key].includes(matchedKey)) {
+                  epicKeyToUserInputs[epic.key].push(matchedKey);
+                }
+              }
+            }
+          });
+          nextPageToken = data.nextPageToken;
+          hasMore = !!nextPageToken;
+        } catch (e) {
+          console.warn("Standard epic verification failed", e);
+          hasMore = false;
+        }
+      }
+    }
+  }
+
+  // Step 1b: Fuzzy search for Epics by summary keyword
+  if (fuzzyNames.length > 0) {
+    const terms = fuzzyNames.map(name => {
+        // Clean bracket wrappers and extract the main search keyword safely
+        const clean = name.replace(/[\[\]]/g, '').trim();
+        const safe = clean.replace(/[^a-zA-Z0-9\u4e00-\u9fa5\-_]/g, ' ').trim().split(' ')[0];
+        return safe ? `summary ~ "${safe}*"` : '';
+    }).filter(x => x);
+    
+    let termsJql = '';
+    if (terms.length > 0) {
+        termsJql = `(${terms.join(' OR ')})`;
+    }
+
     let epicSearchJql = `issuetype in (Epic, "长篇故事") AND created >= -365d`;
     if (projectJql) {
-       epicSearchJql = `${projectJql} AND issuetype in (Epic, "长篇故事") AND created >= -365d AND ${termsJql}`;
+       epicSearchJql = `${projectJql} AND issuetype in (Epic, "长篇故事") AND created >= -365d`;
+       if (termsJql) {
+           epicSearchJql += ` AND ${termsJql}`;
+       }
     } else {
-       epicSearchJql += ` AND ${termsJql}`;
+       if (termsJql) {
+           epicSearchJql += ` AND ${termsJql}`;
+       }
     }
 
     let nextPageToken: string | undefined;
@@ -143,12 +213,17 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
             const summary = epic.fields.summary || '';
             const cleanSummary = summary.toLowerCase().replace(/^[\[\s]+/, '');
             
-            for (const name of validUserKeys) {
+            for (const name of fuzzyNames) {
                 const cleanName = name.toLowerCase().replace(/^[\[\s]+/, '');
                 
                 // Matches standard start or bracket-wrapped start (e.g. "[PROJ-123] ...")
                 if (cleanSummary.startsWith(cleanName) || summary.toLowerCase().startsWith(name.toLowerCase())) {
-                    epicKeyToUserInputMap[epic.key] = name;
+                    if (!epicKeyToUserInputs[epic.key]) {
+                        epicKeyToUserInputs[epic.key] = [];
+                    }
+                    if (!epicKeyToUserInputs[epic.key].includes(name)) {
+                        epicKeyToUserInputs[epic.key].push(name);
+                    }
                 }
             }
         });
@@ -163,15 +238,17 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
 
 
   // Step 2: Fetch logged hours for all mapped Epic keys
-  const targetEpicKeys = Object.keys(epicKeyToUserInputMap);
+  const targetEpicKeys = Object.keys(epicKeyToUserInputs);
   if (targetEpicKeys.length === 0) return result;
 
   const chunkSize = 30;
   for (let i = 0; i < targetEpicKeys.length; i += chunkSize) {
     const chunk = targetEpicKeys.slice(i, i + chunkSize);
-    const chunkStr = chunk.map(k => `"${k}"`).join(',');
+    const validChunk = chunk.filter(k => k && k.trim() !== '');
+    if (validChunk.length === 0) continue;
+    const chunkStr = validChunk.map(k => `"${k}"`).join(',');
     
-    // targetEpicKeys only contains standard Jira keys discovered from Step 1 or provided in standardKeys,
+    // targetEpicKeys only contains standard Jira keys discovered from Step 1,
     // so using 'parent in' and 'issueKey in' is 100% safe. We remove projectJql constraint here to avoid
     // skipping child issues that belong to different projects.
     const jql = `(parent in (${chunkStr}) OR cf[10014] in (${chunkStr}) OR issueKey in (${chunkStr}))`;
@@ -219,10 +296,27 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
 
         if (timeSpentSeconds <= 0) return;
 
-        const userInputKey = epicKeyToUserInputMap[actualKey];
-        if (userInputKey && result[userInputKey]) {
+        // Determine if it's a test issue
+        const issueTypeName = issue.fields.issuetype?.name || '';
+        const isTestIssue = settings.testIssueTypes!
+          .split(',')
+          .map(t => t.trim().toLowerCase())
+          .some(t => t && issueTypeName.toLowerCase().includes(t));
+
+        // Accumulate hours to ALL user input keys that matched this Epic
+        const matchedUserKeys = epicKeyToUserInputs[actualKey];
+        if (matchedUserKeys) {
             const md = timeSpentSeconds / secondsPerDay;
-            result[userInputKey].totalLoggedMd += md;
+            for (const userInputKey of matchedUserKeys) {
+                if (result[userInputKey]) {
+                    result[userInputKey].totalLoggedMd += md;
+                    if (isTestIssue) {
+                      result[userInputKey].testLoggedMd += md;
+                    } else {
+                      result[userInputKey].devLoggedMd += md;
+                    }
+                }
+            }
         }
       });
 

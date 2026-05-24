@@ -216,7 +216,8 @@ graph TD
 
 #### 3.3.12 Jira 工时同步与动态排期扣减 (Jira Timesheet Sync & Deduction)
 在 v1.0.4 版本中，系统新增了专门的「Jira 管理」模块，实现已发生工作量与未来排期的无缝衔接：
-1. **智能模糊搜索 (Fuzzy Epic Matching)**：为了最大程度兼容用户的输入习惯，系统不使用 `issueKey in` 精准查询（因为用户在排期中录入的 Epic Key 并非 Jira 底层的物理 Issue ID，而是写在 Summary 中括号内的业务代号）。系统会将所有输入关键字均归入模糊搜索范围，拼装为 `summary ~ "key*"` 并在设定的项目范围内过滤近一年内创建的 `Epic` 或 `长篇故事`。匹配时，系统会智能清洗中括号等前缀，在内存中进行不区分大小写的 `startsWith` 匹配，从而自动将查到的 Epic Issue Key 映射回用户的输入代号。
+1. **智能模糊搜索 (Fuzzy Epic Matching)**：为了最大程度兼容用户的输入习惯，系统不使用 `issueKey in` 精准查询（因为用户在排期中录入的 Epic Key 并非 Jira 底层的物理 Issue ID，而是写在 Summary 中括号内的业务代号）。系统会将所有输入关键字均归入模糊搜索范围，拼装为 `summary ~ "key*"` 并在设定的项目范围内过滤近一年内创建的 `Epic` 或 `长篇故事`。匹配时，系统会智能清洗中括号等前缀，在内存中进行不区分大小写的 `startsWith` 匹配，从而自动将查到的 Epic Issue Key 映射回用户的输入代号。**若一个代号输入关键字匹配到了多个前缀相同的 Epic，系统会自动将这多个 Epic 节点及其所有子任务的已发生工时进行合并累加统计**。
+
 
 2. **动态 JQL 查询范围 (Query Scope)**：用户可在系统设置中配置关联的 Jira Projects（如 `PROJ-A, PROJ-B`）。配置后，系统会自动在第一阶段检索 Epic 时加上 `project in (...)` 的条件限定，这能显著提升 API 查询速度。为了防止 Epic 下属的一级子任务跨项目关联而导致工时遗漏，在第二阶段已明确 Epic Key 执行工时聚合时，将不再强制拼接项目限定条件。
 3. **自定义工时折算率 (Custom Hours Per Man-Day)**：系统支持在设置中动态调整 1 人天等于多少小时（默认 6 小时）。所有从 Jira 拉取到的 `timespent` (秒) 都会按此参数进行转换。
@@ -226,6 +227,9 @@ graph TD
    在「Jira 管理」中，系统将基于此合并工时计算并直观展示「剩余总工时（即原始开发 + 原始测试 - 已消费，最低为 0）」，方便 PM 直观查看项目整体消化情况。
 
 
-5. **排期智能扣减 (Dev-First Deduction)**：底层排期引擎（SchedulingContext）升级。在启动大盘 AI 排期或计算需求缺口时，系统会采用“优先扣减开发”的策略：优先使用已消费总工时抵扣项目的原始开发评估 (Dev MD)；如果总工时超出了开发需求，溢出部分则继续抵扣测试需求 (Test MD)。AI 引擎最终只会针对抵扣后的**净缺口 (Effective MD)** 进行智能调度，避免了因项目已进行部分开工而导致全局资源超载。
+5. **排期智能扣减 (Smart Deduction Engine)**：底层排期引擎（SchedulingContext）与大盘展示同步升级，支持基于 Jira Issue Type 的**精准扣减 (Precise Deduction)** 与 **开发优先扣减 (Dev-First Deduction)** 两种模式自适应切换：
+   * **策略 A：精准分类扣减（推荐）**。在系统设置中配置了 `测试 Issue Type 标识` 后，引擎会在同步时将工时精准拆分为 `devLoggedMd` 和 `testLoggedMd`。此时采用无溢出独立扣减公式：`effectiveDevMd = max(0, devTotalMd - devLoggedMd)`，`effectiveTestMd = max(0, testTotalMd - testLoggedMd)`，避免 Dev 超支挤占 Test 评估时间。
+   * **策略 B：Dev-First 扣减（回退）**。若项目无测试专属工时（`testLoggedMd === 0`），系统则默认 Jira 中的工时为统一池，采用优先扣减开发、溢出扣减测试的公式：`effectiveDevMd = max(0, devTotalMd - totalLoggedMd)`，`effectiveTestMd = max(0, testTotalMd - max(0, totalLoggedMd - devTotalMd))`。
+   * AI 引擎最终只会针对抵扣后的**净缺口 (Effective MD)** 进行智能调度，避免了因项目已进行部分开工而导致全局资源超载。该公式在 `SchedulingContext.runAudit()` 和 `Dashboard.runAuditForUI()` 中统一执行。
 6. **创建时间窗口限制与中英双语史诗类型兼容 (Creation Window & Epic Type Localization)**：为了避免历史项目及已归档数据的干扰，并在有重名 Epic 时提高匹配精准度，系统在同步 Epic 信息时只查询从当前时间起，过去一年内创建的那些 Epic（在底层的 JQL 查询中均加上 `created >= -365d` 的时间过滤）。同时为了兼容不同语言环境配置下的 Jira，系统支持识别并匹配英文 `Epic` 和中文 `长篇故事` 两种系统默认的史诗类型（在 JQL 中均使用 `issuetype in (Epic, "长篇故事")` 进行限制过滤）。
-
+7. **可控增量与同步反馈 (Controlled Sync & Feedback)**：Jira Sync 模块支持项目级别的**选择性同步**，针对大规模项目集，UI 层增加细粒度进度条展示（`已完成 N / 总计 M`），并在同步结束时将各个 Epic 的具体报错信息集中呈现，杜绝黑盒。同时引入同步节流机制，记录每个项目的 `lastJiraSyncAt` 时间戳，当用户尝试同步 30 分钟内已更新的项目时主动预警拦截，防范 Jira API QPS 超限。
