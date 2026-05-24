@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.4] - 2026-05-17
+## [1.0.4] - 2026-05-25
 
 ### 新特性 (New Features)
 - **Jira 管理模块 (Jira Management Module)**：

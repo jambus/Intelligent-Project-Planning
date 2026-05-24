@@ -171,11 +171,24 @@ export const JiraSync = () => {
                     <td className="p-4 text-center font-mono font-bold text-blue-600 bg-blue-50/10">
                       {p.totalLoggedMd !== undefined ? p.totalLoggedMd.toFixed(1) : '-'}
                     </td>
-                    <td className="p-4 text-center font-mono font-bold text-green-600 bg-green-50/10 border-l border-gray-100">
-                      {p.totalLoggedMd !== undefined 
-                        ? Math.max(0, (p.devTotalMd + p.testTotalMd) - p.totalLoggedMd).toFixed(1) 
-                        : '-'}
-                    </td>
+                    {(() => {
+                      if (p.totalLoggedMd === undefined) {
+                        return (
+                          <td className="p-4 text-center font-mono font-bold text-gray-400 bg-gray-50/10 border-l border-gray-100">
+                            -
+                          </td>
+                        );
+                      }
+                      const remaining = (p.devTotalMd + p.testTotalMd) - p.totalLoggedMd;
+                      const isOverBudget = remaining < 0;
+                      return (
+                        <td className={`p-4 text-center font-mono font-bold border-l border-gray-100 ${
+                          isOverBudget ? 'text-red-600 bg-red-50/50' : 'text-green-600 bg-green-50/10'
+                        }`}>
+                          {remaining.toFixed(1)}
+                        </td>
+                      );
+                    })()}
                     <td className="p-4 text-center font-mono text-[10px] text-gray-500 border-l border-gray-100">
                       {p.lastJiraSyncAt ? <div className="flex items-center justify-center space-x-1"><Clock size={12}/><span>{formatTime(p.lastJiraSyncAt)}</span></div> : '-'}
                     </td>

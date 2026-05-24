@@ -13,6 +13,7 @@ export const Settings = () => {
   const [openAiKey, setOpenAiKey] = useState('');
   const [aiBaseUrl, setAiBaseUrl] = useState('https://api.openai.com/v1');
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
+  const [aiBatchSize, setAiBatchSize] = useState(3);
   const [aiPromptTemplate, setAiPromptTemplate] = useState('');
   
   const [isSaving, setIsSaving] = useState(false);
@@ -30,6 +31,8 @@ export const Settings = () => {
       setOpenAiKey(await getStorageItem('openAiApiKey') || '');
       setAiBaseUrl(await getStorageItem('openAiBaseUrl') || 'https://api.openai.com/v1');
       setAiModel(await getStorageItem('openAiModel') || 'gpt-4o-mini');
+      const savedBatchSize = await getStorageItem('aiBatchSize');
+      setAiBatchSize(savedBatchSize ? Number(savedBatchSize) : 3);
       setAiPromptTemplate(await getStorageItem('aiPromptTemplate') || DEFAULT_SCHEDULING_PROMPT);
     };
     loadSettings();
@@ -48,6 +51,7 @@ export const Settings = () => {
       await setStorageItem('openAiApiKey', openAiKey);
       await setStorageItem('openAiBaseUrl', aiBaseUrl);
       await setStorageItem('openAiModel', aiModel);
+      await setStorageItem('aiBatchSize', aiBatchSize);
       await setStorageItem('aiPromptTemplate', aiPromptTemplate);
       
       setMessage({ type: 'success', text: '设置已保存成功！' });
@@ -180,6 +184,17 @@ export const Settings = () => {
                     value={aiModel} onChange={e => setAiModel(e.target.value)}
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">单次排期项目并发量 (Batch Size)</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  max="20"
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  value={aiBatchSize} onChange={e => setAiBatchSize(Number(e.target.value))}
+                />
+                <p className="text-xs text-gray-500 mt-1">发给大模型的单批次项目数量。数量较少时排期精度更高，但耗时更长。如果希望一次性发给大模型全局调度，可将此值调大（例如 10）。默认 3。</p>
               </div>
             </div>
           </div>

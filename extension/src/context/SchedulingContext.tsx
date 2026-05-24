@@ -2,6 +2,7 @@ import { createContext, useContext, useState, type ReactNode, useRef } from 'rea
 import { db } from '../db';
 import { suggestAllocationsForBatch, type AIMicroAllocation, type SchedulingStrategy } from '../services/ai';
 import { calculateEndDate, isWorkingDay, isValidDateStr, getWorkingDays } from '../utils/dateUtils';
+import { getStorageItem } from '../utils/storage';
 
 interface SchedulingContextType {
   isScheduling: boolean;
@@ -385,7 +386,10 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
 
       // PASS 1: Priority Mini-Batches
       setCurrentStep(2);
-      const BATCH_SIZE = 3;
+      
+      const savedBatchSize = await getStorageItem('aiBatchSize');
+      const BATCH_SIZE = savedBatchSize ? Number(savedBatchSize) : 3;
+      
       for (let i = 0; i < readyProjects.length; i += BATCH_SIZE) {
         checkStop();
         const batch = readyProjects.slice(i, i + BATCH_SIZE);

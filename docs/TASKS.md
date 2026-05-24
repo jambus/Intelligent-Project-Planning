@@ -390,3 +390,17 @@
 - [x] **DONE** **25.5 [JIRA-07] 同步数据缓存与增量更新**
     - [x] 25.5.1 Project 模型新增 `lastJiraSyncAt` 字段，JiraSync 页面展示最近同步时间。
     - [x] 25.5.2 引入同步频率拦截，30分钟内重复请求给出警告提示，防范 API 超限。
+
+## 阶段二十六：动态排期与模糊匹配兜底 (Phase 26: Dynamic Scheduling & Fuzzy Fallback)
+
+### P0 — 核心能力与健壮性
+
+- [x] **DONE** **26.1 [SCHEDULING-01] 动态并发调度控制 (Dynamic Batch Size)**
+    - [x] 26.1.1 在 `Settings.tsx` 中新增 `aiBatchSize` 配置，默认 3。
+    - [x] 26.1.2 改造 `SchedulingContext.tsx` 动态读取此参数并应用到 `PASS 1` 的 mini-batches 中。
+    - [x] 26.1.3 支持大型团队全局统筹与小型精细排期的动态权衡。
+
+- [x] **DONE** **26.2 [JIRA-08] Jira 模糊/精确双轨智能匹配修正**
+    - [x] 26.2.1 修复正则匹配过度干预问题，使得带有中括号的业务代号（如 `[TRP-123]`）能够回退走安全的 `summary ~ "key*"` 模糊检索，避免引发 Jira API 报错。
+    - [x] 26.2.2 将精确 Issue Key（如纯字母数字 `PROJ-123`）增强为 `issueKey = "PROJ-123" OR summary ~ "PROJ-123*"` 双重匹配，保证 100% 覆盖率。
+    - [x] 26.2.3 恢复内存级标题比对的截断逻辑 `replace(/^[\[\s]+/, '')`，完美适配含右中括号的业务标识。
