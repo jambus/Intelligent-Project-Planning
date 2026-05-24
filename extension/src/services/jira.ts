@@ -104,7 +104,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
   const fuzzyNames: string[] = [];
 
   validUserKeys.forEach(k => {
-    if (/^[A-Za-z]+-\d+$/.test(k) || /^\d+$/.test(k)) {
+    if (/^[A-Za-z]+-\d+$/.test(k)) {
       standardKeys.push(k);
     } else {
       fuzzyNames.push(k);
