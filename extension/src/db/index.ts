@@ -33,6 +33,7 @@ export interface Project {
   detailsProductTestMd?: string; // Details Product Test MD
   techStack?: string; // Technical Stack required
   domain?: string; // Product Domain
+  schedulingStrategy?: 'balanced' | 'focused' | 'urgent'; // Strategy for AI allocation
 }
 
 export interface Allocation {
@@ -130,6 +131,16 @@ export class PlannerDatabase extends Dexie {
     });
 
     this.version(6).stores({
+      resources: '++id, name, role',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName'
+    });
+
+    this.version(7).stores({
       resources: '++id, name, role',
       projects: '++id, name, status, priority, digitalResponsible',
       allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',

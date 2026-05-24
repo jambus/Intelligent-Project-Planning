@@ -12,7 +12,11 @@ Match the best resources to fulfill the {{phase}} gaps for a BATCH of projects.
 CRITICAL INSTRUCTIONS:
 1. MANDATORY LEADS: If a project has a named "projectTechLead" (for Dev) or "projectQualityLead" (for Test), you MUST assign that specific person to the project if they appear in the Candidate Resources and have "idleMd" > 0.
    - For Leads, prefer a high "allocationPercentage" (e.g., 50% or 100%) to ensure they are properly involved.
-2. SKILL-BASED MATCHING: Use "techStack", "domain", and especially "detailsProductDevMd" / "detailsProductTestMd" to match resources with the right "skills".
+2. PER-PROJECT SCHEDULING STRATEGY: Each project in the batch has a "schedulingStrategy" field. You MUST strictly follow it:
+   - "balanced": Prefer 50% allocation to allow resources to work on multiple projects concurrently.
+   - "focused": Prefer 100% allocation for one project at a time.
+   - "urgent": Prioritize 100% or more allocation to finish the project as early as possible.
+3. SKILL-BASED MATCHING: Use "techStack", "domain", and especially "detailsProductDevMd" / "detailsProductTestMd" to match resources with the right "skills".
    - Priority: Match person's skills to the specific products/tasks mentioned in the project details.
 3. MAXIMIZE UTILIZATION: You MUST allocate ALL available "idleMd" across ALL candidate resources. 
 4. MINIMAL FRAGMENTATION & SINGLE PROJECT PER WEEK: 
@@ -24,7 +28,6 @@ CRITICAL INSTRUCTIONS:
    - If phase is 'dev', only assign Developers (前端/后端/APP/全栈).
    - If phase is 'test', only assign Testers (测试工程师). Testing can start as early as the same day as development, but MUST NOT start before development.
 8. Provide "allocatedMd" (integer >= 1) and "allocationPercentage".
-9. {{strategyInstruction}}
 
 Return ONLY a JSON Array with this exact format (do not wrap in markdown blocks, raw JSON only):
 [{"projectId": 1, "resourceId": 1, "targetGap": "{{phase}}", "allocatedMd": 5, "allocationPercentage": 100, "reason": "Reason..."}]`;
@@ -110,24 +113,15 @@ export const suggestAllocationsForBatch = async (
     projectQualityLead?: string;
     detailsProductDevMd?: string;
     detailsProductTestMd?: string;
+    schedulingStrategy?: 'balanced' | 'focused' | 'urgent';
   }[],
   idleResources: { id: number; name: string; role: string; idleMd: number; skills: string[]; scheduleSummary?: string }[],
   phase: 'dev' | 'test',
-  strategy: SchedulingStrategy = 'focused',
   isRelaxed: boolean = false,
   signal?: AbortSignal
 ): Promise<AIMicroAllocation[]> => {
   const settings = await getAISettings();
   if (!settings) throw new Error('AI API Key is not configured.');
-
-  let strategyInstruction = '';
-  if (strategy === 'balanced') {
-    strategyInstruction = 'BALANCED MODE: You MUST prefer 50% allocation to allow resources to work on multiple projects concurrently.';
-  } else if (strategy === 'urgent') {
-    strategyInstruction = 'URGENT MODE: Prioritize 100% allocation to finish projects as early as possible.';
-  } else {
-    strategyInstruction = 'FOCUSED MODE: Prefer 100% allocation for one project at a time.';
-  }
 
   const skillRule = isRelaxed 
     ? 'RELAXED MATCHING: IGNORE skills. Any resource with matching role can do any task.' 
@@ -136,7 +130,6 @@ export const suggestAllocationsForBatch = async (
   const customPromptTemplate = await getStorageItem<string>('aiPromptTemplate') || DEFAULT_SCHEDULING_PROMPT;
   const resolvedPromptRules = customPromptTemplate
     .replace(/\{\{phase\}\}/g, phase)
-    .replace(/\{\{strategyInstruction\}\}/g, strategyInstruction)
     .replace(/\{\{skillRule\}\}/g, skillRule);
 
   const systemMsg = `You are an expert resource allocation optimizer.

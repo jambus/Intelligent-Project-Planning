@@ -1,6 +1,15 @@
 import * as XLSX from 'xlsx';
 import { db } from '../db';
 
+const priorityWeight: Record<string, number> = {
+  'High': 3, 'Medium': 2, 'Low': 1,
+  '高': 3, '中': 2, '低': 1,
+  'P0': 4, 'P1': 3, 'P2': 2, 'P3': 1,
+  'Must Win': 5, 'Compliance': 4
+};
+
+const getPriorityWeight = (p: string) => priorityWeight[p] || 0;
+
 // Helper to find column index by matching header names (supports English and Chinese)
 const findColumnIndex = (headers: string[], matchNames: string[]): number => {
   const lowercaseHeaders = (headers || []).map(h => (h || '').toString().toLowerCase().trim());
@@ -60,10 +69,27 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
 
       const sheetProjects = rows.slice(1).map(row => {
         if (!row || !Array.isArray(row)) return null;
+        
+        const priorityStr = idxPriority !== -1 ? row[idxPriority]?.toString() || 'Medium' : 'Medium';
+        const devTotalMd = idxDevMd !== -1 ? Number(row[idxDevMd]) || 0 : 0;
+        const testTotalMd = idxTestMd !== -1 ? Number(row[idxTestMd]) || 0 : 0;
+        const totalMd = devTotalMd + testTotalMd;
+        const isHighPriority = getPriorityWeight(priorityStr) >= 3;
+        const isLargeProject = totalMd > 10; // User specified <=10 means single mode. So >10 means balanced if high priority.
+        // If high priority and not a small project, use balanced. Otherwise focused.
+        // Wait, user said: "高优先级的项目：会采用均衡模式来排。低优先级的项目，或者工时比较小的项目：会采用单人模式来排"
+        // So small project (<=10) -> focused.
+        // Low priority (<3) -> focused.
+        // Others (High priority AND >10) -> balanced.
+        let defaultStrategy: 'balanced' | 'focused' | 'urgent' = 'focused';
+        if (isHighPriority && isLargeProject) {
+          defaultStrategy = 'balanced';
+        }
+        
         return {
           name: idxName !== -1 ? row[idxName]?.toString() || 'Unknown Project' : 'Unknown Project',
           businessOwner: idxBusinessOwner !== -1 ? row[idxBusinessOwner]?.toString() || '' : '',
-          priority: idxPriority !== -1 ? row[idxPriority]?.toString() || 'Medium' : 'Medium',
+          priority: priorityStr,
           status: idxStatus !== -1 ? row[idxStatus]?.toString() || 'To Do' : 'To Do',
           digitalResponsible: idxDigitalResponsible !== -1 ? row[idxDigitalResponsible]?.toString() || '' : '',
           startDate: idxStartDate !== -1 ? row[idxStartDate]?.toString() || '' : '',
@@ -73,12 +99,13 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
           jiraEpicKey: idxJiraKey !== -1 ? row[idxJiraKey]?.toString() || '' : '',
           projectTechLead: idxTechLead !== -1 ? row[idxTechLead]?.toString() || '' : '',
           projectQualityLead: idxQualityLead !== -1 ? row[idxQualityLead]?.toString() || '' : '',
-          devTotalMd: idxDevMd !== -1 ? Number(row[idxDevMd]) || 0 : 0,
-          testTotalMd: idxTestMd !== -1 ? Number(row[idxTestMd]) || 0 : 0,
+          devTotalMd,
+          testTotalMd,
           detailsProductDevMd: idxDetailsDevMd !== -1 ? row[idxDetailsDevMd]?.toString() || '' : '',
           detailsProductTestMd: idxDetailsTestMd !== -1 ? row[idxDetailsTestMd]?.toString() || '' : '',
           techStack: idxTechStack !== -1 ? row[idxTechStack]?.toString() || '' : '',
           domain: idxDomain !== -1 ? row[idxDomain]?.toString() || '' : '',
+          schedulingStrategy: defaultStrategy,
         };
       }).filter((p): p is any => p !== null && (p.name !== 'Unknown Project' || p.businessOwner !== ''));
 

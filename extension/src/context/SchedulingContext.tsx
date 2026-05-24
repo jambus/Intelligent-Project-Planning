@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode, useRef } from 'react';
 import { db } from '../db';
-import { suggestAllocationsForBatch, type AIMicroAllocation, type SchedulingStrategy } from '../services/ai';
+import { suggestAllocationsForBatch, type AIMicroAllocation } from '../services/ai';
 import { calculateEndDate, isWorkingDay, isValidDateStr, getWorkingDays, getWeekNumber, getISOWeekYear } from '../utils/dateUtils';
 import { getStorageItem } from '../utils/storage';
 
@@ -9,8 +9,6 @@ interface SchedulingContextType {
   scheduleStatus: string;
   currentStep: number;
   error: string | null;
-  strategy: SchedulingStrategy;
-  setStrategy: (s: SchedulingStrategy) => void;
   handleGenerateSchedule: (selectedYear: number, startMonth: number, endMonth: number, shouldClear?: boolean) => Promise<void>;
   stopScheduling: () => void;
   clearError: () => void;
@@ -39,7 +37,6 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
   const [scheduleStatus, setScheduleStatus] = useState('');
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [strategy, setStrategy] = useState<SchedulingStrategy>('balanced');
   
   const stopRequestedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -486,17 +483,17 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         const batch = readyProjects.slice(i, i + BATCH_SIZE);
         setScheduleStatus(`🛠️ 阶段一：像素匹配 [${i+1}~${Math.min(i+BATCH_SIZE, readyProjects.length)}]...`);
         const { gaps: dGaps, idle: dIdle } = runAudit(readyProjects, resources, currentAllocations);
-        const bDev = batch.map(p => ({ ...p, gap: Math.ceil(dGaps.find(g => g.id === p.id)?.devGap || 0), projectTechLead: p.projectTechLead, detailsProductDevMd: p.detailsProductDevMd })).filter(p => p.gap >= 1);
+        const bDev = batch.map(p => ({ ...p, gap: Math.ceil(dGaps.find(g => g.id === p.id)?.devGap || 0), projectTechLead: p.projectTechLead, detailsProductDevMd: p.detailsProductDevMd, schedulingStrategy: p.schedulingStrategy })).filter(p => p.gap >= 1);
         if (bDev.length && dIdle.some(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role))) {
-          const sug = await suggestAllocationsForBatch(bDev as any, dIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)), 'dev', strategy, false, signal);
+          const sug = await suggestAllocationsForBatch(bDev as any, dIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)), 'dev', false, signal);
           checkStop();
           await applySuggestions(sug, 'dev', batch);
         }
         checkStop();
         const { gaps: tGaps, idle: tIdle } = runAudit(readyProjects, resources, currentAllocations);
-        const bTest = batch.map(p => ({ ...p, gap: Math.ceil(tGaps.find(g => g.id === p.id)?.testGap || 0), projectQualityLead: p.projectQualityLead, detailsProductTestMd: p.detailsProductTestMd })).filter(p => p.gap >= 1);
+        const bTest = batch.map(p => ({ ...p, gap: Math.ceil(tGaps.find(g => g.id === p.id)?.testGap || 0), projectQualityLead: p.projectQualityLead, detailsProductTestMd: p.detailsProductTestMd, schedulingStrategy: p.schedulingStrategy })).filter(p => p.gap >= 1);
         if (bTest.length && tIdle.some(r => r.role === '测试工程师')) {
-          const sug = await suggestAllocationsForBatch(bTest as any, tIdle.filter(r => r.role === '测试工程师'), 'test', strategy, false, signal);
+          const sug = await suggestAllocationsForBatch(bTest as any, tIdle.filter(r => r.role === '测试工程师'), 'test', false, signal);
           checkStop();
           await applySuggestions(sug, 'test', batch);
         }
@@ -539,11 +536,11 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         const pool = [...retryQueue, ...readyProjects.filter(p => !retryQueue.includes(p))];
         const devG = hGaps.map(g => {
           const p = readyProjects.find(rp => rp.id === g.id);
-          return { ...g, gap: Math.ceil(g.devGap), projectTechLead: p?.projectTechLead, detailsProductDevMd: p?.detailsProductDevMd };
+          return { ...g, gap: Math.ceil(g.devGap), projectTechLead: p?.projectTechLead, detailsProductDevMd: p?.detailsProductDevMd, schedulingStrategy: p?.schedulingStrategy };
         }).filter(g => g.gap >= 1);
         const devI = hIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role));
         if (devG.length && devI.length) {
-          const sug = await suggestAllocationsForBatch(devG as any, devI, 'dev', strategy, true, signal);
+          const sug = await suggestAllocationsForBatch(devG as any, devI, 'dev', true, signal);
           checkStop();
           await applySuggestions(sug, 'dev', pool);
         }
@@ -551,11 +548,11 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         const { gaps: hGaps2, idle: hIdle2 } = runAudit(readyProjects, resources, currentAllocations);
         const testG = hGaps2.map(g => {
           const p = readyProjects.find(rp => rp.id === g.id);
-          return { ...g, gap: Math.ceil(g.testGap), projectQualityLead: p?.projectQualityLead, detailsProductTestMd: p?.detailsProductTestMd };
+          return { ...g, gap: Math.ceil(g.testGap), projectQualityLead: p?.projectQualityLead, detailsProductTestMd: p?.detailsProductTestMd, schedulingStrategy: p?.schedulingStrategy };
         }).filter(g => g.gap >= 1);
         const testI = hIdle2.filter(r => r.role === '测试工程师');
         if (testG.length && testI.length) {
-          const sug = await suggestAllocationsForBatch(testG as any, testI, 'test', strategy, true, signal);
+          const sug = await suggestAllocationsForBatch(testG as any, testI, 'test', true, signal);
           checkStop();
           await applySuggestions(sug, 'test', pool);
         }
@@ -583,7 +580,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <SchedulingContext.Provider value={{
-      isScheduling, scheduleStatus, currentStep, error, strategy, setStrategy, handleGenerateSchedule, stopScheduling, clearError: () => setError(null)
+      isScheduling, scheduleStatus, currentStep, error, handleGenerateSchedule, stopScheduling, clearError: () => setError(null)
     }}>
       {children}
     </SchedulingContext.Provider>

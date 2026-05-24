@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { useScheduling } from '../../context/SchedulingContext';
-import { Users, ChevronDown, ChevronUp, ArrowRight, ClipboardList, AlertTriangle, FileWarning, Search, TriangleAlert, User, Briefcase, RefreshCcw, CheckCircle2, Settings2, Zap, X, Play } from 'lucide-react';
+import { Users, ChevronDown, ChevronUp, ArrowRight, ClipboardList, AlertTriangle, FileWarning, Search, TriangleAlert, User, Briefcase, RefreshCcw, CheckCircle2, Zap, X, Play } from 'lucide-react';
 import { getWorkingDays, getWeeksInRange, calculateWeeklyMD } from '../../utils/dateUtils';
 
 export const Dashboard = () => {
@@ -11,7 +11,7 @@ export const Dashboard = () => {
   const allocations = useLiveQuery(() => db.allocations.toArray());
   const operations = useLiveQuery(() => db.productOperations.toArray());
   
-  const { isScheduling, scheduleStatus, currentStep, error, strategy, setStrategy, handleGenerateSchedule, stopScheduling, clearError } = useScheduling();
+  const { isScheduling, scheduleStatus, currentStep, error, handleGenerateSchedule, stopScheduling, clearError } = useScheduling();
   const [groupMode, setGroupMode] = useState<'resource' | 'project'>('resource');
 
   // Collapse states
@@ -186,14 +186,6 @@ export const Dashboard = () => {
             </select>
           </div>
 
-          <div className="flex items-center space-x-2 px-2 border-l border-gray-100">
-            <Settings2 size={14} className="text-gray-400" />
-            <select value={strategy} onChange={(e) => setStrategy(e.target.value as any)} className="appearance-none py-2 pr-4 text-sm font-medium text-gray-600 border-none focus:ring-0 cursor-pointer bg-transparent">
-              <option value="focused">专注模式 (1人1项目 100%)</option>
-              <option value="balanced">均衡模式 (分时多任务 50%)</option>
-              <option value="urgent">紧急模式 (加急推进 100%+)</option>
-            </select>
-          </div>
 
           {isScheduling ? (
             <button 
