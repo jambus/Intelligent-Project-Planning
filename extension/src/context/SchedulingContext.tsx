@@ -125,13 +125,14 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         if (sharedMatrix.has(res.id)) return sharedMatrix.get(res.id)!;
         const calendar: DailySlot[] = [];
         let current = new Date(rangeStart);
+        const resAllocs = currentAllocs.filter(a => Number(a.resourceId) === Number(res.id));
         while (current <= rangeEnd) {
           const dateStr = current.toISOString().split('T')[0];
           const weekYear = getISOWeekYear(current);
           const weekNumber = getWeekNumber(current);
           if (workingDaySet.has(dateStr)) {
             let used = 0;
-            currentAllocs.filter(a => Number(a.resourceId) === Number(res.id)).forEach(a => {
+            resAllocs.forEach(a => {
               if (dateStr >= a.startDate && dateStr <= a.endDate) {
                 used += (a.allocationPercentage || 0);
               }
@@ -150,20 +151,23 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         }
         
         // Populate assignedNonOpProjects for the whole week
-        currentAllocs.filter(a => Number(a.resourceId) === Number(res.id)).forEach(a => {
+        resAllocs.forEach(a => {
           if (a.projectId > 0) {
+            const aStart = new Date(a.startDate);
+            const aEnd = new Date(a.endDate);
+            const sDate = new Date(aStart > new Date(rangeStart) ? aStart : rangeStart);
+            const eDate = new Date(aEnd < new Date(rangeEnd) ? aEnd : rangeEnd);
+            
+            const occupiedWeeks = new Set<string>();
+            let curr = new Date(sDate);
+            while (curr <= eDate) {
+              occupiedWeeks.add(`${getISOWeekYear(curr)}-${getWeekNumber(curr)}`);
+              curr.setDate(curr.getDate() + 1);
+            }
+            
             calendar.forEach(slot => {
-              const aStart = new Date(a.startDate);
-              const aEnd = new Date(a.endDate);
-              const sDate = new Date(aStart > new Date(rangeStart) ? aStart : rangeStart);
-              const eDate = new Date(aEnd < new Date(rangeEnd) ? aEnd : rangeEnd);
-              let curr = new Date(sDate);
-              while (curr <= eDate) {
-                if (getISOWeekYear(curr) === slot.weekYear && getWeekNumber(curr) === slot.weekNumber) {
-                  slot.assignedNonOpProjects.add(a.projectId);
-                  break;
-                }
-                curr.setDate(curr.getDate() + 1);
+              if (occupiedWeeks.has(`${slot.weekYear}-${slot.weekNumber}`)) {
+                slot.assignedNonOpProjects.add(a.projectId);
               }
             });
           }
@@ -176,23 +180,25 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
       const updateResourceCalendar = (resId: number, newAlloc: any) => {
         const calendar = sharedMatrix.get(resId);
         if (calendar) {
+          const occupiedWeeks = new Set<string>();
+          if (newAlloc.projectId > 0) {
+            const aStart = new Date(newAlloc.startDate);
+            const aEnd = new Date(newAlloc.endDate);
+            let curr = new Date(aStart);
+            while (curr <= aEnd) {
+              occupiedWeeks.add(`${getISOWeekYear(curr)}-${getWeekNumber(curr)}`);
+              curr.setDate(curr.getDate() + 1);
+            }
+          }
+
           calendar.forEach(slot => {
             if (slot.date >= newAlloc.startDate && slot.date <= newAlloc.endDate) {
                slot.usedCapacity += newAlloc.allocationPercentage;
                const res = resources.find(r => r.id === resId);
                slot.available = Math.max(0, (res?.capacity || 100) - slot.usedCapacity);
             }
-            if (newAlloc.projectId > 0) {
-              const aStart = new Date(newAlloc.startDate);
-              const aEnd = new Date(newAlloc.endDate);
-              let curr = new Date(aStart);
-              while (curr <= aEnd) {
-                if (getISOWeekYear(curr) === slot.weekYear && getWeekNumber(curr) === slot.weekNumber) {
-                  slot.assignedNonOpProjects.add(newAlloc.projectId);
-                  break;
-                }
-                curr.setDate(curr.getDate() + 1);
-              }
+            if (newAlloc.projectId > 0 && occupiedWeeks.has(`${slot.weekYear}-${slot.weekNumber}`)) {
+               slot.assignedNonOpProjects.add(newAlloc.projectId);
             }
           });
         }
@@ -250,13 +256,17 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         return { gaps, idle };
       };
 
-      const findEarliestFitDate = (resourceId: number, currentAllocs: any[], defaultStartDate: string, percentage: number, resources: any[], projectId: number) => {
+      const findEarliestFitDate = (resourceId: number, currentAllocs: any[], defaultStartDate: string, percentage: number, resources: any[], projectId: number, strategy?: string) => {
         const res = resources?.find(r => Number(r.id) === Number(resourceId));
         if (!res) return "9999-12-31";
         const calendar = getResourceCalendar(res, currentAllocs);
         const fit = calendar.find(slot => {
           if (slot.date < defaultStartDate) return false;
-          if (slot.available < percentage) return false;
+          if (strategy === 'urgent') {
+            if (slot.available <= 0) return false;
+          } else {
+            if (slot.available < percentage) return false;
+          }
           if (projectId > 0) {
             if (slot.assignedNonOpProjects.size > 0 && !slot.assignedNonOpProjects.has(projectId)) {
               return false;
@@ -296,12 +306,21 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         let count = 0;
         console.group(`[Hard Logic] Applying ${suggestions.length} AI suggestions for ${phase.toUpperCase()}`);
         const { gaps: cGaps, idle: cIdle } = runAudit(readyProjects, resources, currentAllocations);
+        const focusedAssigned = new Set<number>();
         
         for (const sug of suggestions) {
           checkStop();
           const project = pool.find(p => Number(p.id) === Number(sug.projectId));
           const resource = resources.find(r => Number(r.id) === Number(sug.resourceId));
           if (!project || !resource) continue;
+
+          if (project.schedulingStrategy === 'focused') {
+            if (focusedAssigned.has(project.id!)) {
+              console.warn(`[Hard Logic] Skipped secondary suggestion for focused project ${project.id}`);
+              continue;
+            }
+            focusedAssigned.add(project.id!);
+          }
 
           const pGap = cGaps.find(g => Number(g.id) === Number(project.id));
           const rIdle = cIdle.find(r => Number(r.id) === Number(resource.id));
@@ -315,7 +334,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             const perc = sug.allocationPercentage || 100;
             let start = isValidDateStr(project.startDate) ? project.startDate! : defaultStart;
             if (phase === 'test') start = calculateTestStartDate(project.id!, currentAllocations, start);
-            const startDate = findEarliestFitDate(resource.id!, currentAllocations, start, perc, resources, project.id!);
+            const startDate = findEarliestFitDate(resource.id!, currentAllocations, start, perc, resources, project.id!, project.schedulingStrategy);
             if (startDate > scheduleMaxDate) continue;
             
             let endDate = calculateEndDate(startDate, exactFinalMd, perc);
@@ -329,10 +348,11 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             const eDate = new Date(endDate);
             let truncatedDate = endDate;
             const resCalendar = getResourceCalendar(resource, currentAllocations);
+            const calendarMap = new Map(resCalendar.map(s => [s.date, s]));
             
             while (curr <= eDate) {
               const dStr = curr.toISOString().split('T')[0];
-              const slot = resCalendar.find(s => s.date === dStr);
+              const slot = calendarMap.get(dStr);
               if (slot && slot.assignedNonOpProjects.size > 0 && !slot.assignedNonOpProjects.has(project.id!)) {
                 // Hitting a boundary of another project! Truncate right before this.
                 let prev = new Date(curr);
@@ -420,29 +440,31 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
 
               for (const res of phaseCandidates) {
                 if (remainingMd <= 0) break;
-                const { idle } = runAudit([], resources, currentAllocations);
-                const rIdle = idle.find(r => r.id === res.id);
-                if (!rIdle || rIdle.idleMd < 1) continue;
+                
+                const resCalendar = getResourceCalendar(res, currentAllocations);
+                const idleMd = resCalendar.reduce((sum, slot) => sum + (slot.available / 100), 0);
+                if (idleMd < 1) continue;
 
                 // Check how many days the resource has available in this specific month
-                const resCalendar = getResourceCalendar(res, currentAllocations);
-                const monthSlots = resCalendar.filter(s => s.date >= monthStart && s.date <= monthEnd && s.available >= 100);
+                const monthSlots = resCalendar.filter(s => s.date >= monthStart && s.date <= monthEnd && s.available > 0);
                 if (monthSlots.length === 0) continue;
 
-                const allocMd = Math.min(remainingMd, monthSlots.length);
+                // maxAvailableMd is the sum of fractions of available days
+                const maxAvailableMd = monthSlots.reduce((sum, s) => sum + (s.available / 100), 0);
+                const allocMd = Math.min(remainingMd, maxAvailableMd);
                 if (allocMd < 1) continue;
 
-                const perc = 100;
-                // Start from the first available slot in this month
-                const startDate = monthSlots[0].date;
-                let endDate = calculateEndDate(startDate, allocMd, perc);
-                
-                if (endDate > monthEnd) {
-                  endDate = monthEnd;
-                }
+                const monthWorkingDays = getWorkingDays(new Date(monthStart), new Date(monthEnd), workingDaySet);
+                if (monthWorkingDays === 0) continue;
 
-                // Recalculate actual MD allocated in this window in case it was capped
-                const actualWorkingDays = getWorkingDays(new Date(startDate), new Date(endDate), workingDaySet);
+                // To avoid clustering ops in a single week, spread them evenly over the entire month
+                let perc = (allocMd / monthWorkingDays) * 100;
+                if (perc > 100) perc = 100;
+
+                const startDate = monthStart;
+                const endDate = monthEnd;
+
+                const actualWorkingDays = monthWorkingDays;
                 const actualAllocMd = Math.min((actualWorkingDays * perc) / 100, remainingMd);
 
                 if (actualAllocMd >= 1) {

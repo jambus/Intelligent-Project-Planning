@@ -404,3 +404,23 @@
     - [x] 26.2.1 修复正则匹配过度干预问题，使得带有中括号的业务代号（如 `[TRP-123]`）能够回退走安全的 `summary ~ "key*"` 模糊检索，避免引发 Jira API 报错。
     - [x] 26.2.2 将精确 Issue Key（如纯字母数字 `PROJ-123`）增强为 `issueKey = "PROJ-123" OR summary ~ "PROJ-123*"` 双重匹配，保证 100% 覆盖率。
     - [x] 26.2.3 恢复内存级标题比对的截断逻辑 `replace(/^[\[\s]+/, '')`，完美适配含右中括号的业务标识。
+
+## v1.0.5 排期策略 Code Review 修复任务
+
+### 逻辑问题修复
+- [x] **27.1 Task 1: `focused` 模式 JS 硬兜底**
+  - 在 `applySuggestions` 中增加 `focused` 模式的硬约束检查，仅保留第一个候选人。
+- [x] **27.2 Task 2: `urgent` 模式 >100% 投入兼容**
+  - 修改 `findEarliestFitDate` 逻辑，允许 `urgent` 模式突破 100% 空闲检查。
+- [x] **27.3 Task 3: Prompt 中 `MANDATORY LEADS` 与 `focused` 语义冲突**
+  - 修改 `DEFAULT_SCHEDULING_PROMPT` 规则，消除冲突。
+- [x] **27.4 Task 4: PASS 0 `runAudit` 空项目调用语义冗余**
+  - 优化 PASS 0 中的资源空闲度获取方式。
+
+### 性能优化
+- [x] **27.5 Task 5: `updateResourceCalendar` 嵌套循环优化**
+  - 消除 O(slots × days) 的跨周遍历。
+- [x] **27.6 Task 6: `applySuggestions` 内 slot 线性搜索优化**
+  - 将 `resCalendar.find` 升级为 Map O(1) 查找。
+- [x] **27.7 Task 7: `getResourceCalendar` 重复 filter 优化**
+  - 复用 `currentAllocs.filter`。

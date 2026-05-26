@@ -16,6 +16,7 @@ Match the best resources to fulfill the {{phase}} gaps for a BATCH of projects.
 CRITICAL INSTRUCTIONS:
 1. MANDATORY LEADS: If a project has a named "projectTechLead" (for Dev) or "projectQualityLead" (for Test), you MUST assign that specific person to the project if they appear in the Candidate Resources and have "idleMd" > 0.
    - For Leads, prefer a high "allocationPercentage" (e.g., 50% or 100%) to ensure they are properly involved.
+   - Note: When schedulingStrategy is "focused", the Lead IS the sole person. Do NOT add additional people even if the project gap is larger than the Lead's idleMd.
 2. PER-PROJECT SCHEDULING STRATEGY: Each project in the batch has a "schedulingStrategy" field. You MUST strictly follow it:
    - "focused" (单人模式): {{strategyFocused}}
    - "balanced" (均衡模式): {{strategyBalanced}}
