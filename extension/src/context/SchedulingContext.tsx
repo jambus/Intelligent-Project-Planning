@@ -427,51 +427,48 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
               });
 
               for (const res of phaseCandidates) {
-                if (remainingMd <= 0) break;
-                
-                const resCalendar = getResourceCalendar(res, currentAllocations);
-                const idleMd = resCalendar.reduce((sum, slot) => sum + (slot.available / 100), 0);
-                if (idleMd < 1) continue;
+                if (remainingMd < 0.5) break;
 
-                // Check how many days the resource has available in this specific month
-                const monthSlots = resCalendar.filter(s => s.date >= monthStart && s.date <= monthEnd && s.available > 0);
+                // Ops occupies WHOLE working days at the resource's daily capacity.
+                // Spreading a tiny fraction (e.g. 1MD/22d ≈ 5%) across the whole month
+                // makes every week round to 0 in the schedule view, so the person
+                // appears assigned yet "empty". Allocating full days keeps it visible.
+                const dailyCap = res.capacity || 100;
+                const mdPerDay = dailyCap / 100;
+                if (mdPerDay <= 0) continue;
+
+                const resCalendar = getResourceCalendar(res, currentAllocations);
+                // Only use days that still have a full day of capacity free for ops.
+                const monthSlots = resCalendar
+                  .filter(s => s.date >= monthStart && s.date <= monthEnd && s.available >= dailyCap)
+                  .sort((a, b) => a.date.localeCompare(b.date));
                 if (monthSlots.length === 0) continue;
 
-                // maxAvailableMd is the sum of fractions of available days
-                const maxAvailableMd = monthSlots.reduce((sum, s) => sum + (s.available / 100), 0);
-                const allocMd = Math.min(remainingMd, maxAvailableMd);
-                if (allocMd < 1) continue;
+                const daysNeeded = Math.min(Math.ceil(remainingMd / mdPerDay), monthSlots.length);
+                if (daysNeeded < 1) continue;
 
-                const monthWorkingDays = getWorkingDays(new Date(monthStart), new Date(monthEnd), workingDaySet);
-                if (monthWorkingDays === 0) continue;
-
-                // To avoid clustering ops in a single week, spread them evenly over the entire month
-                let perc = (allocMd / monthWorkingDays) * 100;
-                if (perc > 100) perc = 100;
-
-                const startDate = monthStart;
-                const endDate = monthEnd;
-
-                const actualWorkingDays = monthWorkingDays;
-                const actualAllocMd = Math.min((actualWorkingDays * perc) / 100, remainingMd);
-
-                if (actualAllocMd >= 1) {
-                  const allocToSave = { 
-                    resourceId: res.id!, 
+                // Spread the chosen days evenly across the available days to avoid
+                // clustering all ops work into a single week.
+                const step = monthSlots.length / daysNeeded;
+                for (let i = 0; i < daysNeeded; i++) {
+                  if (remainingMd < 0.5) break;
+                  const slot = monthSlots[Math.floor(i * step)];
+                  const allocToSave = {
+                    resourceId: res.id!,
                     projectId: -(op.id! + 1000000), // Virtual project ID for Ops
-                    allocationPercentage: perc, 
-                    startDate, 
-                    endDate, 
-                    allocationType: phase 
+                    allocationPercentage: dailyCap,
+                    startDate: slot.date,
+                    endDate: slot.date,
+                    allocationType: phase
                   };
                   currentAllocations.push(allocToSave);
                   await db.allocations.add({
                     ...allocToSave,
-                    allocationPercentage: Math.round(perc)
+                    allocationPercentage: Math.round(dailyCap)
                   } as any);
-                  
+
                   updateResourceCalendar(res.id!, allocToSave);
-                  remainingMd -= actualAllocMd;
+                  remainingMd -= mdPerDay;
                 }
               }
             };
