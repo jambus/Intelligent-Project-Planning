@@ -48,9 +48,18 @@ const fetchFromJira = async (endpoint: string, settings: JiraSettings, method: s
 
   const response = await fetch(url, options);
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('JIRA_AUTH_ERROR');
+    }
     const errText = await response.text();
     throw new Error(`Jira API error: ${response.status} ${response.statusText} - ${errText}`);
   }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('text/html')) {
+    throw new Error('JIRA_AUTH_ERROR');
+  }
+
   return response.json();
 };
 
@@ -162,7 +171,8 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
           });
           nextPageToken = data.nextPageToken;
           hasMore = !!nextPageToken;
-        } catch (e) {
+        } catch (e: any) {
+          if (e.message === 'JIRA_AUTH_ERROR') throw e;
           console.warn("Standard epic verification failed", e);
           hasMore = false;
         }
@@ -229,7 +239,8 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
         });
         nextPageToken = data.nextPageToken;
         hasMore = !!nextPageToken;
-      } catch (e) {
+      } catch (e: any) {
+        if (e.message === 'JIRA_AUTH_ERROR') throw e;
         console.warn("Epic fuzzy search failed", e);
         hasMore = false;
       }

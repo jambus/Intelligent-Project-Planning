@@ -66,7 +66,15 @@ export const JiraSync = () => {
       }
     } catch (err: any) {
       console.error("Jira Sync Error:", err);
-      errors.push({ projectName: '全局', epicKey: '-', message: err.message || '未知错误' });
+      if (err.message === 'JIRA_AUTH_ERROR') {
+        setSyncError({
+          title: '未登录 Jira',
+          message: '检测到您尚未登录 Jira，或登录态已失效。请先登录 Jira 然后再尝试同步。',
+          details: '请在新标签页中打开 Jira 并登录。如果您配置了 API Token，请检查 Token 是否有效。'
+        });
+      } else {
+        errors.push({ projectName: '全局', epicKey: '-', message: err.message || '未知错误' });
+      }
     }
 
     setSyncProgress(null);
