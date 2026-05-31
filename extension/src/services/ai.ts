@@ -45,50 +45,95 @@ export const getAISettings = async (): Promise<AISettings | null> => {
   return { apiKey, model, baseUrl };
 };
 
-const extractJsonArray = (text: string): any[] => {
-  try {
-    const start = text.indexOf('[');
-    const end = text.lastIndexOf(']');
-    if (start === -1 || end === -1) return [];
-    const arr = JSON.parse(text.substring(start, end + 1));
-    if (!Array.isArray(arr)) return [];
+// Default client-side timeout. DeepSeek and other reasoning-heavy models often
+// take well over a minute per batch, so the default is generous. Can be
+// overridden via the `aiTimeout` setting (seconds).
+const DEFAULT_AI_TIMEOUT_MS = 180000;
 
-    return arr.filter(entry => {
-      const isValid = 
-        entry.projectId > 0 && 
-        entry.resourceId > 0 && 
-        entry.allocatedMd >= 1 && 
-        entry.allocationPercentage >= 1 && 
-        entry.allocationPercentage <= 200;
-        
-      if (!isValid) {
-        console.warn('[AI Schema] invalid entry:', entry);
-      }
-      return isValid;
-    });
-  } catch (err) {
+const getAiTimeoutMs = async (): Promise<number> => {
+  const raw = await getStorageItem<number | string>('aiTimeout');
+  const seconds = Number(raw);
+  if (!raw || !Number.isFinite(seconds) || seconds <= 0) return DEFAULT_AI_TIMEOUT_MS;
+  return seconds * 1000;
+};
+
+const extractJsonArray = (text: string): any[] => {
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start === -1 || end === -1) {
+    // The model returned no JSON array — treat as "no suggestions", not an error.
+    console.warn('[AI Schema] No JSON array found in response (treated as empty).');
     return [];
   }
+  let arr: any;
+  try {
+    arr = JSON.parse(text.substring(start, end + 1));
+  } catch (err) {
+    // Genuine parse failure: surface it distinctly so it is not silently swallowed.
+    console.error('[AI Schema] Failed to parse JSON array from response:', err);
+    return [];
+  }
+  if (!Array.isArray(arr)) return [];
+
+  return arr.filter(entry => {
+    const isValid =
+      entry.projectId > 0 &&
+      entry.resourceId > 0 &&
+      entry.allocatedMd >= 1 &&
+      entry.allocationPercentage >= 1 &&
+      entry.allocationPercentage <= 100;
+
+    if (!isValid) {
+      console.warn('[AI Schema] invalid entry:', entry);
+    }
+    return isValid;
+  });
 };
 
 const callAI = async (systemMsg: string, prompt: string, settings: AISettings, signal?: AbortSignal) => {
   const url = `${settings.baseUrl.replace(/\/$/, '')}/chat/completions`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${settings.apiKey}`
-    },
-    body: JSON.stringify({
-      model: settings.model,
-      messages: [{ role: 'system', content: systemMsg }, { role: 'user', content: prompt }],
-      temperature: 0.05,
-    }),
-    signal
-  });
-  if (!response.ok) throw new Error(`AI API Error: ${response.status}`);
-  const data = await response.json();
-  return extractJsonArray(data.choices[0].message.content.trim());
+  // Guard against a hung request: abort after the configured timeout. Also
+  // honour an external abort signal (e.g. the user pressing "stop").
+  const timeoutMs = await getAiTimeoutMs();
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+  const onExternalAbort = () => timeoutController.abort();
+  if (signal) {
+    if (signal.aborted) timeoutController.abort();
+    else signal.addEventListener('abort', onExternalAbort);
+  }
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settings.apiKey}`
+      },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [{ role: 'system', content: systemMsg }, { role: 'user', content: prompt }],
+        temperature: 0.05,
+      }),
+      signal: timeoutController.signal
+    });
+    if (!response.ok) throw new Error(`AI API Error: ${response.status}`);
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string') {
+      console.warn('[AI] Unexpected response shape: missing choices[0].message.content.');
+      return [];
+    }
+    return extractJsonArray(content.trim());
+  } catch (err) {
+    // Distinguish our own timeout from an external (user-initiated) abort.
+    if (timeoutController.signal.aborted && !signal?.aborted) {
+      throw new Error(`AI API 超时（${timeoutMs / 1000}s），请检查网络或 API 配置`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+    if (signal) signal.removeEventListener('abort', onExternalAbort);
+  }
 };
 
 export interface AIMicroAllocation {

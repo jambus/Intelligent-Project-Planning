@@ -8,12 +8,14 @@ export const Settings = () => {
   const [jiraProjects, setJiraProjects] = useState('');
   const [jiraHoursPerDay, setJiraHoursPerDay] = useState(6);
   const [jiraTestIssueTypes, setJiraTestIssueTypes] = useState('Test,QA,Bug,Defect,测试,缺陷');
+  const [jiraEpicLinkFieldId, setJiraEpicLinkFieldId] = useState('10014');
   const [jiraEmail, setJiraEmail] = useState('');
   const [jiraToken, setJiraToken] = useState('');
   const [openAiKey, setOpenAiKey] = useState('');
   const [aiBaseUrl, setAiBaseUrl] = useState('https://api.openai.com/v1');
   const [aiModel, setAiModel] = useState('gpt-4o-mini');
   const [aiBatchSize, setAiBatchSize] = useState(3);
+  const [aiTimeout, setAiTimeout] = useState(180);
   const [aiPromptTemplate, setAiPromptTemplate] = useState('');
   const [strategyFocused, setStrategyFocused] = useState('');
   const [strategyBalanced, setStrategyBalanced] = useState('');
@@ -29,6 +31,7 @@ export const Settings = () => {
       const hours = await getStorageItem('jiraHoursPerDay');
       setJiraHoursPerDay(hours ? Number(hours) : 6);
       setJiraTestIssueTypes(await getStorageItem('jiraTestIssueTypes') || 'Test,QA,Bug,Defect,测试,缺陷');
+      setJiraEpicLinkFieldId(await getStorageItem('jiraEpicLinkFieldId') || '10014');
       setJiraEmail(await getStorageItem('jiraEmail') || '');
       setJiraToken(await getStorageItem('jiraApiToken') || '');
       setOpenAiKey(await getStorageItem('openAiApiKey') || '');
@@ -36,6 +39,8 @@ export const Settings = () => {
       setAiModel(await getStorageItem('openAiModel') || 'gpt-4o-mini');
       const savedBatchSize = await getStorageItem('aiBatchSize');
       setAiBatchSize(savedBatchSize ? Number(savedBatchSize) : 3);
+      const savedTimeout = await getStorageItem('aiTimeout');
+      setAiTimeout(savedTimeout ? Number(savedTimeout) : 180);
       setAiPromptTemplate(await getStorageItem('aiPromptTemplate') || DEFAULT_SCHEDULING_PROMPT);
       setStrategyFocused(await getStorageItem('strategyFocused') || DEFAULT_STRATEGY_FOCUSED);
       setStrategyBalanced(await getStorageItem('strategyBalanced') || DEFAULT_STRATEGY_BALANCED);
@@ -52,12 +57,14 @@ export const Settings = () => {
       await setStorageItem('jiraProjects', jiraProjects);
       await setStorageItem('jiraHoursPerDay', jiraHoursPerDay);
       await setStorageItem('jiraTestIssueTypes', jiraTestIssueTypes);
+      await setStorageItem('jiraEpicLinkFieldId', jiraEpicLinkFieldId);
       await setStorageItem('jiraEmail', jiraEmail);
       await setStorageItem('jiraApiToken', jiraToken);
       await setStorageItem('openAiApiKey', openAiKey);
       await setStorageItem('openAiBaseUrl', aiBaseUrl);
       await setStorageItem('openAiModel', aiModel);
       await setStorageItem('aiBatchSize', aiBatchSize);
+      await setStorageItem('aiTimeout', aiTimeout);
       await setStorageItem('aiPromptTemplate', aiPromptTemplate);
       await setStorageItem('strategyFocused', strategyFocused);
       await setStorageItem('strategyBalanced', strategyBalanced);
@@ -142,6 +149,16 @@ export const Settings = () => {
                 />
                 <p className="text-xs text-gray-500 mt-1">同步 Epic 工时时，若子任务的类型命中这些关键字（不区分大小写），则该工时计入「已消费测试」，否则默认计入「已消费开发」。多个关键字以逗号分隔。</p>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Epic Link 自定义字段 ID (Epic Link Field)</label>
+                <input 
+                  type="text" 
+                  placeholder="例如: 10014"
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  value={jiraEpicLinkFieldId} onChange={e => setJiraEpicLinkFieldId(e.target.value)}
+                />
+                <p className="text-xs text-gray-500 mt-1">不同 Jira 实例的「Epic Link」自定义字段编号可能不同，拉取工时时底层使用 `cf[ID]` 与 `customfield_ID` 匹配子任务。默认 10014，仅填数字。</p>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Jira 邮箱</label>
@@ -207,6 +224,17 @@ export const Settings = () => {
                   value={aiBatchSize} onChange={e => setAiBatchSize(Number(e.target.value))}
                 />
                 <p className="text-xs text-gray-500 mt-1">发给大模型的单批次项目数量。数量较少时排期精度更高，但耗时更长。如果希望一次性发给大模型全局调度，可将此值调大（例如 10）。默认 3。</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">AI 请求超时 (Timeout / 秒)</label>
+                <input 
+                  type="number" 
+                  min="10"
+                  max="600"
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  value={aiTimeout} onChange={e => setAiTimeout(Number(e.target.value))}
+                />
+                <p className="text-xs text-gray-500 mt-1">单次调用大模型的最长等待时间（秒）。DeepSeek 等推理型模型响应较慢，如频繁提示超时请调大此值。默认 180。</p>
               </div>
             </div>
           </div>

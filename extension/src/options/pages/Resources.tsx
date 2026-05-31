@@ -92,6 +92,14 @@ export const Resources = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Import REPLACES all existing resources (clear + bulkAdd). Warn first.
+    if ((resources?.length || 0) > 0) {
+      if (!window.confirm(`导入将清空并覆盖现有的 ${resources!.length} 名资源（不可撤销）。是否继续？`)) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    }
+
     setIsImporting(true);
     setError(null);
     try {

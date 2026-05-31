@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, type ReactNode, useRef } from 'react';
 import { db } from '../db';
 import { suggestAllocationsForBatch, type AIMicroAllocation } from '../services/ai';
-import { calculateEndDate, isWorkingDay, isValidDateStr, getWorkingDays, getWeekNumber, getISOWeekYear } from '../utils/dateUtils';
+import { calculateEndDate, isWorkingDay, isValidDateStr, getWorkingDays, getWeekNumber, getISOWeekYear, formatLocalDate, loadHolidaysConfig } from '../utils/dateUtils';
+import { computeProjectGaps } from '../utils/audit';
 import { getStorageItem } from '../utils/storage';
 
 interface SchedulingContextType {
@@ -93,10 +94,13 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
 
     const rangeStart = new Date(selectedYear, startMonth - 1, 1);
     const rangeEnd = new Date(selectedYear, endMonth, 0);
+    // Ensure the calendar (holidays / special workdays) reflects the user's saved
+    // configuration even if the Holidays page was never opened this session.
+    await loadHolidaysConfig();
     const workingDaySet = new Set<string>();
     for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
       if (isWorkingDay(d)) {
-        workingDaySet.add(d.toISOString().split('T')[0]);
+        workingDaySet.add(formatLocalDate(d));
       }
     }
 
@@ -126,11 +130,16 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         const calendar: DailySlot[] = [];
         let current = new Date(rangeStart);
         const resAllocs = currentAllocs.filter(a => Number(a.resourceId) === Number(res.id));
+        const leaveDays: Set<string> = new Set(Array.isArray(res.unavailableDates) ? res.unavailableDates : []);
         while (current <= rangeEnd) {
-          const dateStr = current.toISOString().split('T')[0];
+          const dateStr = formatLocalDate(current);
           const weekYear = getISOWeekYear(current);
           const weekNumber = getWeekNumber(current);
           if (workingDaySet.has(dateStr)) {
+            // Personal leave (请假): the resource has zero capacity that day, so it
+            // can neither be allocated to nor counted as idle.
+            const onLeave = leaveDays.has(dateStr);
+            const dayCapacity = onLeave ? 0 : res.capacity;
             let used = 0;
             resAllocs.forEach(a => {
               if (dateStr >= a.startDate && dateStr <= a.endDate) {
@@ -139,9 +148,9 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             });
             calendar.push({
               date: dateStr,
-              totalCapacity: res.capacity,
+              totalCapacity: dayCapacity,
               usedCapacity: used,
-              available: Math.max(0, res.capacity - used),
+              available: Math.max(0, dayCapacity - used),
               weekYear,
               weekNumber,
               assignedNonOpProjects: new Set<number>()
@@ -205,31 +214,8 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
       };
 
       const runAudit = (currentProjs: any[], currentRes: any[], currentAllocs: any[]) => {
-        const gaps = currentProjs.map(p => {
-          const pAllocations = currentAllocs.filter(a => Number(a.projectId) === Number(p.id));
-          let dev = 0, test = 0;
-          pAllocations.forEach(a => {
-            const res = currentRes.find(r => Number(r.id) === Number(a.resourceId));
-            const workingDays = getWorkingDays(new Date(a.startDate), new Date(a.endDate), workingDaySet);
-            const md = (workingDays * (a.allocationPercentage || 0)) / 100;
-            if (a.allocationType === 'test' || res?.role === '测试工程师') test += md; else dev += md;
-          });
-          const devTotal = p.devTotalMd || 0;
-          const testTotal = p.testTotalMd || 0;
-          let effectiveDevTotal = devTotal;
-          let effectiveTestTotal = testTotal;
-          
-          if ((p.testLoggedMd || 0) > 0) {
-            effectiveDevTotal = Math.max(0, devTotal - (p.devLoggedMd || 0));
-            effectiveTestTotal = Math.max(0, testTotal - (p.testLoggedMd || 0));
-          } else {
-            const logged = p.totalLoggedMd || 0;
-            effectiveDevTotal = Math.max(0, devTotal - logged);
-            const remainingLogged = Math.max(0, logged - devTotal);
-            effectiveTestTotal = Math.max(0, testTotal - remainingLogged);
-          }
-          return { ...p, devGap: Math.max(0, effectiveDevTotal - dev), testGap: Math.max(0, effectiveTestTotal - test) };
-        }).filter(p => Math.ceil(p.devGap) >= 1 || Math.ceil(p.testGap) >= 1);
+        const gaps = computeProjectGaps(currentProjs, currentRes, currentAllocs, workingDaySet)
+          .filter(p => Math.ceil(p.devGap) >= 1 || Math.ceil(p.testGap) >= 1);
 
         const idle = currentRes.map(r => {
           const calendar = getResourceCalendar(r, currentAllocs);
@@ -296,10 +282,10 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         
         const midpointTime = earliest.getTime() + (latest.getTime() - earliest.getTime()) / 2;
         let d = new Date(midpointTime);
-        while(d > earliest && !workingDaySet.has(d.toISOString().split('T')[0])) {
+        while(d > earliest && !workingDaySet.has(formatLocalDate(d))) {
            d.setDate(d.getDate() - 1);
         }
-        return d.toISOString().split('T')[0];
+        return formatLocalDate(d);
       };
 
       const applySuggestions = async (suggestions: AIMicroAllocation[], phase: 'dev' | 'test', pool: any[]) => {
@@ -351,19 +337,22 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             const calendarMap = new Map(resCalendar.map(s => [s.date, s]));
             
             while (curr <= eDate) {
-              const dStr = curr.toISOString().split('T')[0];
+              const dStr = formatLocalDate(curr);
               const slot = calendarMap.get(dStr);
               if (slot && slot.assignedNonOpProjects.size > 0 && !slot.assignedNonOpProjects.has(project.id!)) {
                 // Hitting a boundary of another project! Truncate right before this.
                 let prev = new Date(curr);
                 prev.setDate(prev.getDate() - 1);
-                truncatedDate = prev.toISOString().split('T')[0];
+                truncatedDate = formatLocalDate(prev);
                 break;
               }
               curr.setDate(curr.getDate() + 1);
             }
             
             endDate = truncatedDate;
+            // Clip to the scheduling horizon BEFORE recomputing man-days, otherwise
+            // actualMd would over-count days that fall beyond scheduleMaxDate (#5).
+            if (endDate > scheduleMaxDate) endDate = scheduleMaxDate;
             if (endDate < startDate) continue; // Cannot even schedule 1 day
             
             // Recalculate exactFinalMd based on potentially truncated endDate
@@ -371,7 +360,6 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             const actualMd = Math.min((actualWorkingDays * perc) / 100, exactFinalMd);
             if (actualMd < 1) continue;
 
-            if (endDate > scheduleMaxDate) endDate = scheduleMaxDate;
             const allocToSave = { 
               resourceId: resource.id!, 
               projectId: project.id!, 
@@ -525,6 +513,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
       checkStop();
       setScheduleStatus(`🛡️ 阶段二：完整性审计回滚...`);
       let retryQueue: any[] = [];
+      let didRollback = false;
       const { gaps: aGaps } = runAudit(readyProjects, resources, currentAllocations);
       for (const project of readyProjects) {
         checkStop();
@@ -540,10 +529,13 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             currentAllocations = currentAllocations.filter(a => Number(a.projectId) !== Number(project.id));
             await db.allocations.where('projectId').equals(project.id!).delete();
             retryQueue.push(project);
-            sharedMatrix.clear();
+            didRollback = true;
           }
         }
       }
+      // Invalidate the cached calendars ONCE after all rollbacks so PASS 3 rebuilds
+      // from the cleaned-up allocations (avoids O(n\u00b2) matrix rebuilds, #6).
+      if (didRollback) sharedMatrix.clear();
 
       // PASS 3: Convergence Loops
       setCurrentStep(3);

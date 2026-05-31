@@ -4,6 +4,7 @@ import { db } from '../../db';
 import { useScheduling } from '../../context/SchedulingContext';
 import { Users, ChevronDown, ChevronUp, ArrowRight, ClipboardList, AlertTriangle, FileWarning, Search, TriangleAlert, User, Briefcase, RefreshCcw, CheckCircle2, Zap, X, Play } from 'lucide-react';
 import { getWorkingDays, getWeeksInRange, calculateWeeklyMD } from '../../utils/dateUtils';
+import { computeProjectGaps } from '../../utils/audit';
 
 export const Dashboard = () => {
   const projects = useLiveQuery(() => db.projects.toArray());
@@ -51,49 +52,29 @@ export const Dashboard = () => {
     return groups;
   }, [displayWeeks]);
 
-  // UI-only audit logic for display
+  // UI-only audit logic for display. Project gaps use the shared auditor so the
+  // dashboard never drifts from the scheduling engine; idle is computed against
+  // the currently displayed week range for the grid.
   const runAuditForUI = (currentProjects: any[], currentResources: any[], currentAllocations: any[]) => {
-    const gaps = currentProjects.map(p => {
-      const pAllocations = currentAllocations.filter(a => Number(a.projectId) === Number(p.id));
-      let dev = 0, test = 0;
-      pAllocations.forEach(a => {
-        const res = currentResources.find(r => Number(r.id) === Number(a.resourceId));
-        const workingDays = getWorkingDays(new Date(a.startDate), new Date(a.endDate));
-        const md = Math.round((workingDays * (a.allocationPercentage || 0)) / 100);
-        if (a.allocationType === 'test' || res?.role === '测试工程师') test += md; else dev += md;
-      });
-      const devTotal = p.devTotalMd || 0;
-      const testTotal = p.testTotalMd || 0;
-      let effectiveDevTotal = devTotal;
-      let effectiveTestTotal = testTotal;
-      
-      if ((p.testLoggedMd || 0) > 0) {
-        effectiveDevTotal = Math.max(0, devTotal - (p.devLoggedMd || 0));
-        effectiveTestTotal = Math.max(0, testTotal - (p.testLoggedMd || 0));
-      } else {
-        const logged = p.totalLoggedMd || 0;
-        effectiveDevTotal = Math.max(0, devTotal - logged);
-        const remainingLogged = Math.max(0, logged - devTotal);
-        effectiveTestTotal = Math.max(0, testTotal - remainingLogged);
-      }
-      return { ...p, devGap: Math.max(0, effectiveDevTotal - dev), testGap: Math.max(0, effectiveTestTotal - test) };
-    }).filter(p => p.devGap >= 1 || p.testGap >= 1);
+    const gaps = computeProjectGaps(currentProjects, currentResources, currentAllocations)
+      .filter(p => Math.ceil(p.devGap) >= 1 || Math.ceil(p.testGap) >= 1);
 
     const idle = currentResources.map(r => {
       const rAllocations = currentAllocations.filter(a => Number(a.resourceId) === Number(r.id));
+      // Accumulate at full precision; round once at the end (#8).
       let totalAllocatedMdInRange = 0;
       displayWeeks.forEach(w => {
         rAllocations.forEach(a => {
-          totalAllocatedMdInRange += Math.round(calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week));
+          totalAllocatedMdInRange += calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week);
         });
       });
-      
+
       const rangeStart = new Date(selectedYear, startMonth - 1, 1);
       const rangeEnd = new Date(selectedYear, endMonth, 0);
       const totalWorkingDaysInRange = getWorkingDays(rangeStart, rangeEnd);
-      const capacityMd = Math.round((totalWorkingDaysInRange * r.capacity) / 100);
+      const capacityMd = (totalWorkingDaysInRange * r.capacity) / 100;
       const utilization = capacityMd > 0 ? (totalAllocatedMdInRange / capacityMd) * 100 : 0;
-      return { ...r, idleMd: Math.max(0, capacityMd - totalAllocatedMdInRange), utilization };
+      return { ...r, idleMd: Math.max(0, Math.round(capacityMd - totalAllocatedMdInRange)), utilization };
     }).filter(r => r.idleMd >= 1);
 
     return { gaps, idle };

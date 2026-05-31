@@ -53,6 +53,7 @@ export const JiraSync = () => {
       const keys = targets.map(p => p.jiraEpicKey);
       const hoursMap = await syncEpicLoggedHours(keys);
 
+      let done = 0;
       for (const p of targets) {
         const stats = hoursMap[p.jiraEpicKey];
         if (stats) {
@@ -62,7 +63,12 @@ export const JiraSync = () => {
             testLoggedMd: stats.testLoggedMd,
             lastJiraSyncAt: Date.now()
           });
+        } else {
+          // Batch returned no data for this Epic (e.g. wrong key or no worklog).
+          errors.push({ projectName: p.name, epicKey: p.jiraEpicKey, message: '未获取到该 Epic 的工时数据（请检查 Epic Key 是否正确或是否有登记工时）' });
         }
+        done += 1;
+        setSyncProgress({ current: done, total: targets.length });
       }
     } catch (err: any) {
       console.error("Jira Sync Error:", err);

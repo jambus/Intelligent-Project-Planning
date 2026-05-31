@@ -27,6 +27,43 @@ export const updateHolidaysConfig = (holidays: string[], specialWorkdays: string
 };
 
 /**
+ * Format a Date into a YYYY-MM-DD string using LOCAL date components.
+ * NOTE: Never use `toISOString().split('T')[0]` for calendar dates — it converts
+ * to UTC and can shift the day by one in non-UTC timezones, corrupting
+ * working-day / week / holiday matching.
+ */
+export const formatLocalDate = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+/**
+ * Load persisted holiday / special-workday configuration from IndexedDB and
+ * apply it to the global calendar. Falls back to the hardcoded defaults when no
+ * configuration has been saved. Safe to call before any scheduling run so the
+ * engine never relies on stale defaults just because the Holidays page was
+ * never opened.
+ */
+export const loadHolidaysConfig = async (): Promise<void> => {
+  try {
+    const { db } = await import('../db');
+    const settings = await db.settings.toArray();
+    const hSetting = settings.find(s => s.key === 'holidays');
+    const swSetting = settings.find(s => s.key === 'specialWorkdays');
+    if (hSetting || swSetting) {
+      updateHolidaysConfig(
+        hSetting ? hSetting.value : Array.from(HOLIDAYS),
+        swSetting ? swSetting.value : Array.from(SPECIAL_WORKDAYS)
+      );
+    }
+  } catch (e) {
+    console.warn('[dateUtils] Failed to load holidays config, using defaults.', e);
+  }
+};
+
+/**
  * Check if a string is a valid date
  */
 export const isValidDateStr = (dateStr: string | undefined | null): boolean => {
@@ -40,7 +77,7 @@ export const isValidDateStr = (dateStr: string | undefined | null): boolean => {
  */
 export const isWorkingDay = (date: Date): boolean => {
   if (isNaN(date.getTime())) return false;
-  const dateStr = date.toISOString().split('T')[0];
+  const dateStr = formatLocalDate(date);
   const day = date.getDay(); // 0 is Sunday, 6 is Saturday
 
   // If it's a special workday, return true
@@ -60,7 +97,7 @@ export const getWorkingDays = (start: Date, end: Date, workingDaySet?: Set<strin
   let count = 0;
   const current = new Date(start);
   while (current <= end) {
-    const dateStr = current.toISOString().split('T')[0];
+    const dateStr = formatLocalDate(current);
     if (workingDaySet) {
       if (workingDaySet.has(dateStr)) {
         count++;
@@ -118,16 +155,20 @@ export const calculateEndDate = (startDateStr: string, mdNeeded: number, percent
   const current = new Date(startDateStr);
   let daysAdded = 0;
   
-  // Find valid working days
-  while (true) {
+  // Find valid working days. Guard against an infinite loop in case the holiday
+  // configuration is malformed (e.g. every day marked as a holiday).
+  let safety = 0;
+  const MAX_ITERATIONS = 366 * 20; // ~20 years of calendar days
+  while (safety < MAX_ITERATIONS) {
     if (isWorkingDay(current)) {
       daysAdded++;
       if (daysAdded >= workingDaysNeeded) break;
     }
     current.setDate(current.getDate() + 1);
+    safety++;
   }
   
-  return current.toISOString().split('T')[0];
+  return formatLocalDate(current);
 };
 
 /**

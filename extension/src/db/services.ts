@@ -16,6 +16,9 @@ export const updateResource = async (id: number, changes: Partial<Resource>) => 
 };
 
 export const deleteResource = async (id: number) => {
+  // Cascade: remove allocations referencing this resource so the schedule
+  // doesn't keep orphaned records pointing at a deleted person.
+  await db.allocations.where('resourceId').equals(id).delete();
   return await db.resources.delete(id);
 };
 
@@ -35,6 +38,8 @@ export const updateProject = async (id: number, changes: Partial<Project>) => {
 };
 
 export const deleteProject = async (id: number) => {
+  // Cascade: remove allocations referencing this project.
+  await db.allocations.where('projectId').equals(id).delete();
   return await db.projects.delete(id);
 };
 

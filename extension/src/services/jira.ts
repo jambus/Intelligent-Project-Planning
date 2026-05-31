@@ -7,6 +7,7 @@ interface JiraSettings {
   projects?: string;
   hoursPerDay?: number;
   testIssueTypes?: string;
+  epicLinkFieldId?: string; // Jira "Epic Link" custom field numeric id (default 10014)
 }
 
 export const getJiraSettings = async (): Promise<JiraSettings | null> => {
@@ -17,9 +18,11 @@ export const getJiraSettings = async (): Promise<JiraSettings | null> => {
   const hoursPerDayStr = await getStorageItem<string>('jiraHoursPerDay');
   const hoursPerDay = hoursPerDayStr ? Number(hoursPerDayStr) : 6;
   const testIssueTypes = await getStorageItem<string>('jiraTestIssueTypes') || 'Test,QA,Bug,Defect,测试,缺陷';
+  // Epic Link field id varies per Jira instance; allow override, fall back to 10014.
+  const epicLinkFieldId = (await getStorageItem<string>('jiraEpicLinkFieldId') || '10014').replace(/\D/g, '') || '10014';
 
   if (!domain) return null;
-  return { domain, email: email || '', apiToken: apiToken || '', projects: projects || '', hoursPerDay, testIssueTypes };
+  return { domain, email: email || '', apiToken: apiToken || '', projects: projects || '', hoursPerDay, testIssueTypes, epicLinkFieldId };
 };
 
 const fetchFromJira = async (endpoint: string, settings: JiraSettings, method: string = 'GET', body?: any) => {
@@ -94,10 +97,10 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
   const settings = await getJiraSettings();
   if (!settings) throw new Error('Jira 设置未配置 (Jira settings not configured).');
 
-  // We added jiraHoursPerDay to JiraSettings locally in settings.tsx, we need to read it here if added, default to 6.
-  // Wait, I need to make sure getJiraSettings reads it. I added it to getJiraSettings in the previous step? Yes.
   const hoursPerDay = (settings as any).hoursPerDay || 6;
   const secondsPerDay = hoursPerDay * 3600;
+  const epicLinkFieldId = settings.epicLinkFieldId || '10014';
+  const epicLinkFieldName = `customfield_${epicLinkFieldId}`;
 
   const result: Record<string, EpicHours> = {};
   epicKeys.forEach(key => {
@@ -262,7 +265,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
     // targetEpicKeys only contains standard Jira keys discovered from Step 1,
     // so using 'parent in' and 'issueKey in' is 100% safe. We remove projectJql constraint here to avoid
     // skipping child issues that belong to different projects.
-    const jql = `(parent in (${chunkStr}) OR cf[10014] in (${chunkStr}) OR issueKey in (${chunkStr}))`;
+    const jql = `(parent in (${chunkStr}) OR cf[${epicLinkFieldId}] in (${chunkStr}) OR issueKey in (${chunkStr}))`;
 
     let nextPageToken: string | undefined;
     let hasMore = true;
@@ -271,7 +274,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
       const body: Record<string, any> = {
         jql,
         maxResults: 100,
-        fields: ['parent', 'customfield_10014', 'issuetype', 'timespent', 'aggregatetimespent', 'timetracking', 'summary'],
+        fields: ['parent', epicLinkFieldName, 'issuetype', 'timespent', 'aggregatetimespent', 'timetracking', 'summary'],
       };
       if (nextPageToken) body.nextPageToken = nextPageToken;
       
@@ -282,8 +285,8 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
         let actualKey = issue.key;
         if (issue.fields.parent && issue.fields.parent.key) {
           actualKey = issue.fields.parent.key;
-        } else if (issue.fields.customfield_10014) {
-          actualKey = issue.fields.customfield_10014;
+        } else if (issue.fields[epicLinkFieldName]) {
+          actualKey = issue.fields[epicLinkFieldName];
         }
 
         // If the issue is the Epic itself (issue.key === actualKey), 

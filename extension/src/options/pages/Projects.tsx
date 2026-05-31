@@ -40,6 +40,14 @@ export const Projects = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Import REPLACES all existing projects (clear + bulkAdd). Warn first.
+    if ((projects?.length || 0) > 0) {
+      if (!window.confirm(`导入将清空并覆盖现有的 ${projects!.length} 个项目（不可撤销）。是否继续？`)) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    }
+
     setIsImporting(true);
     setError(null);
     try {

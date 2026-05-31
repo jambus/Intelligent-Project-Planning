@@ -240,3 +240,23 @@ graph TD
    * AI 引擎最终只会针对抵扣后的**净缺口 (Effective MD)** 进行智能调度，避免了因项目已进行部分开工而导致全局资源超载。该公式在 `SchedulingContext.runAudit()` 和 `Dashboard.runAuditForUI()` 中统一执行。
 6. **创建时间窗口限制与中英双语史诗类型兼容 (Creation Window & Epic Type Localization)**：为了避免历史项目及已归档数据的干扰，并在有重名 Epic 时提高匹配精准度，系统在同步 Epic 信息时只查询从当前时间起，过去一年内创建的那些 Epic（在底层的 JQL 查询中均加上 `created >= -365d` 的时间过滤）。同时为了兼容不同语言环境配置下的 Jira，系统支持识别并匹配英文 `Epic` 和中文 `长篇故事` 两种系统默认的史诗类型（在 JQL 中均使用 `issuetype in (Epic, "长篇故事")` 进行限制过滤）。
 7. **可控增量与同步反馈 (Controlled Sync & Feedback)**：Jira Sync 模块支持项目级别的**选择性同步**，针对大规模项目集，UI 层增加细粒度进度条展示（`已完成 N / 总计 M`），并在同步结束时将各个 Epic 的具体报错信息集中呈现，杜绝黑盒。同时引入同步节流机制，记录每个项目的 `lastJiraSyncAt` 时间戳，当用户尝试同步 30 分钟内已更新的项目时主动预警拦截，防范 Jira API QPS 超限。
+8. **登录态智能检测 (Auth State Detection)**：底层网络请求引擎能够主动探测 `401 Unauthorized` 和 `403 Forbidden` 等未授权状态，并能识别出被 Jira 重定向到登录页面的 HTML 响应。一旦检测到未登录，系统会立即阻断同步流程，并在页面上通过弹窗强制提醒用户在新标签页中完成 Jira 登录，避免无效的 API 空转和数据 0 工时异常。
+
+#### 3.3.13 排期精准度与健壮性加固 (Scheduling Precision & Robustness Hardening)
+在 v1.0.5 版本中，系统针对排期引擎的边界精度与运行健壮性做了一轮系统性加固：
+
+1. **本地时区安全日期 (Timezone-Safe Local Dates)**：所有用于工作日判定、节假日匹配与排期起止计算的日期键，统一改由 `formatLocalDate(date)` 基于本地 `getFullYear/getMonth/getDate` 生成 `YYYY-MM-DD`，彻底弃用会因 UTC 偏移而跨日的 `toISOString().split('T')[0]`。这解决了东八区凌晨时段排期时，工作日计数与假期判定整体偏移一天的隐患。
+
+2. **节假日配置动态加载 (Dynamic Holiday Loading)**：每次排期启动前，引擎会先从 IndexedDB（`db.settings` 的 `holidays`/`specialWorkdays`）读取用户在「节假日管理」中的自定义配置并注入 `updateHolidaysConfig`，确保用户维护的法定假期与调休日真正参与排期，读取失败时回退至内置默认值。
+
+3. **统一缺口口径与累计精度 (Unified Gap & Float Precision)**：抽取共享纯函数 `computeProjectGaps`，作为排期引擎 `runAudit()` 与大盘 `runAuditForUI()` 的单一缺口计算来源，避免两处口径漂移。人天累计在整个过程中保留浮点精度，仅在最终写入存储与界面展示时统一取整，消除逐条四舍五入累积出的偏差。
+
+4. **资源请假感知 (Leave-Aware Capacity)**：生成资源日历 (`getResourceCalendar`) 时读取每位成员的 `unavailableDates`，命中请假日的当日产能直接置 0，保证排期引擎不会将工作排入员工的休假区间。
+
+5. **边界与循环健壮性 (Boundary & Loop Robustness)**：① 排期终点越界截断（超过 `scheduleMaxDate`）的时机提前到实际工作日/人天重算之前，修正越界场景下人天被高估的问题；② `calculateEndDate` 以带迭代上限的有界循环替代 `while(true)`，防止极端节假日配置卡死；③ PASS 2 完整性回滚不再于循环内反复重建共享槽位矩阵，改为标记后按需清理一次，消除 O(n²) 重复开销。
+
+6. **AI 调用超时与解析容错 (AI Timeout & Parsing Resilience)**：AI 请求引入 `AbortController` 超时（默认 60s）并区分「超时」与「用户主动停止」两类中断；`extractJsonArray` 区分「响应无数组括号（视为空建议）」与「JSON 解析失败」，收紧分配占比上限至 `<= 100%`，并对 `data.choices[0].message.content` 缺失做防御，避免异常响应击穿排期流程。
+
+7. **数据安全与级联一致性 (Data Safety & Cascade Consistency)**：项目与人员的文件导入本质为「清空并覆盖」操作，导入前若已有数据会弹出二次确认（提示不可撤销）；同时 `deleteResource`/`deleteProject` 在删除主记录前级联清理其关联的 `allocations`，杜绝指向已删除实体的孤儿排期记录。
+
+8. **可配置 Jira Epic Link 字段 (Configurable Epic Link Field)**：考虑到不同 Jira 实例的 Epic Link 自定义字段 ID 并不一致，系统在「系统设置」中新增「Epic Link 自定义字段 ID」配置项（默认 `10014`），`syncEpicLoggedHours` 据此动态拼接 `cf[xxxxx]` 与 `customfield_xxxxx`。此外 Jira 同步过程新增逐项目进度展示与按 Epic 维度的缺失工时错误汇总，提升大批量同步的可观测性。
