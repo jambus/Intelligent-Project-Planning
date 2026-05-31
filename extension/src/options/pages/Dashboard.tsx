@@ -90,22 +90,22 @@ export const Dashboard = () => {
 
   const scheduledProjectsList = useMemo(() => {
     if (!projects || !allocations || !resources) return [];
-    return projects.filter(p => {
-      const pAllocs = allocations.filter(a => Number(a.projectId) === Number(p.id));
-      if (pAllocs.length === 0) return false;
-      const hasDevReq = p.devTotalMd > 0, hasTestReq = p.testTotalMd > 0;
-      const hasDevAlloc = pAllocs.some(a => {
-        const res = resources.find(r => Number(r.id) === Number(a.resourceId));
-        return a.allocationType === 'dev' || (res && ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(res.role));
-      });
-      const hasTestAlloc = pAllocs.some(a => {
-        const res = resources.find(r => Number(r.id) === Number(a.resourceId));
-        return a.allocationType === 'test' || (res && res.role === '测试工程师');
-      });
-      if (hasDevReq && hasTestReq) return hasDevAlloc && hasTestAlloc;
-      if (hasDevReq) return hasDevAlloc;
-      if (hasTestReq) return hasTestAlloc;
-      return false;
+    const ready = projects.filter(p => p.devTotalMd > 0 || p.testTotalMd > 0);
+    // Single source of truth: a required dimension counts as "done" when its
+    // remaining gap (after subtracting Jira-consumed MD AND existing allocations)
+    // drops below 1 MD. This credits work already consumed in Jira even when no
+    // new allocation was created for it, so a project whose dev/test was finished
+    // in Jira still shows as 已排 instead of silently disappearing.
+    const gapById = new Map(
+      computeProjectGaps(ready, resources, allocations).map(g => [Number(g.id), g])
+    );
+    return ready.filter(p => {
+      const g = gapById.get(Number(p.id));
+      if (!g) return false;
+      const devDone = p.devTotalMd <= 0 || Math.ceil(g.devGap) < 1;
+      const testDone = p.testTotalMd <= 0 || Math.ceil(g.testGap) < 1;
+      // 已排满 = every required dimension's remaining work is fully covered.
+      return devDone && testDone;
     }).map(p => {
       const pAllocs = allocations.filter(a => Number(a.projectId) === Number(p.id));
       const devs = Array.from(new Set(pAllocs.filter(a => {
@@ -116,7 +116,10 @@ export const Dashboard = () => {
         const res = resources.find(r => Number(r.id) === Number(a.resourceId));
         return a.allocationType === 'test' || (res && res.role === '测试工程师');
       }).map(a => resources.find(r => r.id === a.resourceId)?.name))).filter(Boolean);
-      return { ...p, assignedDevs: devs.join(', '), assignedTesters: testers.join(', '), allPersonnel: [...new Set([...devs, ...testers])].join(', ') };
+      // A required dimension fully covered by Jira consumption has no new allocation.
+      const devViaJira = p.devTotalMd > 0 && devs.length === 0;
+      const testViaJira = p.testTotalMd > 0 && testers.length === 0;
+      return { ...p, assignedDevs: devs.join(', '), assignedTesters: testers.join(', '), allPersonnel: [...new Set([...devs, ...testers])].join(', '), devViaJira, testViaJira };
     });
   }, [projects, allocations, resources]);
 
@@ -297,12 +300,21 @@ export const Dashboard = () => {
                       <td className="p-4 text-gray-600 font-medium">{p.projectTechLead || '-'}</td>
                       <td className="p-4 text-gray-600 font-medium">{p.projectQualityLead || '-'}</td>
                       <td className="p-4">
-                        <div className="flex flex-wrap gap-1">
-                          {p.allPersonnel.split(', ').map((name: string) => (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          {p.allPersonnel && p.allPersonnel.split(', ').map((name: string) => (
                             <span key={name} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold">
                               {name}
                             </span>
                           ))}
+                          {p.devViaJira && (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold">开发·Jira工时已消耗</span>
+                          )}
+                          {p.testViaJira && (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold">测试·Jira工时已消耗</span>
+                          )}
+                          {!p.allPersonnel && !p.devViaJira && !p.testViaJira && (
+                            <span className="text-gray-400 text-[10px]">-</span>
+                          )}
                         </div>
                       </td>
                     </tr>
