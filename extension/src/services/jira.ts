@@ -7,6 +7,7 @@ interface JiraSettings {
   projects?: string;
   hoursPerDay?: number;
   testIssueTypes?: string;
+  epicLinkFieldId?: string; // Jira "Epic Link" custom field numeric id (default 10014)
 }
 
 export const getJiraSettings = async (): Promise<JiraSettings | null> => {
@@ -17,9 +18,11 @@ export const getJiraSettings = async (): Promise<JiraSettings | null> => {
   const hoursPerDayStr = await getStorageItem<string>('jiraHoursPerDay');
   const hoursPerDay = hoursPerDayStr ? Number(hoursPerDayStr) : 6;
   const testIssueTypes = await getStorageItem<string>('jiraTestIssueTypes') || 'Test,QA,Bug,Defect,测试,缺陷';
+  // Epic Link field id varies per Jira instance; allow override, fall back to 10014.
+  const epicLinkFieldId = (await getStorageItem<string>('jiraEpicLinkFieldId') || '10014').replace(/\D/g, '') || '10014';
 
   if (!domain) return null;
-  return { domain, email: email || '', apiToken: apiToken || '', projects: projects || '', hoursPerDay, testIssueTypes };
+  return { domain, email: email || '', apiToken: apiToken || '', projects: projects || '', hoursPerDay, testIssueTypes, epicLinkFieldId };
 };
 
 const fetchFromJira = async (endpoint: string, settings: JiraSettings, method: string = 'GET', body?: any) => {
@@ -48,9 +51,18 @@ const fetchFromJira = async (endpoint: string, settings: JiraSettings, method: s
 
   const response = await fetch(url, options);
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('JIRA_AUTH_ERROR');
+    }
     const errText = await response.text();
     throw new Error(`Jira API error: ${response.status} ${response.statusText} - ${errText}`);
   }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('text/html')) {
+    throw new Error('JIRA_AUTH_ERROR');
+  }
+
   return response.json();
 };
 
@@ -70,30 +82,125 @@ export const syncJiraIssues = async (projectKey: string): Promise<any> => {
   return data.issues;
 };
 
+export interface RosterMember {
+  name: string;
+  role: string;
+  aliases?: string[]; // Explicit Jira identities (accountId / email / display name) to reconcile name mismatches
+}
+
 export interface EpicHours {
   epicKey: string;
   totalLoggedMd: number;
   devLoggedMd: number;
   testLoggedMd: number;
+  status?: string;    // Epic current status name
+  storyCount: number; // # of Story children
+  taskCount: number;  // # of Task children
+  bugCount: number;   // # of Bug children
+}
+
+/**
+ * A Jira worklog author that could NOT be matched to any roster member.
+ * Surfaced to the UI so the user can map them (accountId / email / display name)
+ * to a team member instead of silently falling back to the issue-type heuristic.
+ */
+export interface UnmatchedAuthor {
+  accountId?: string;
+  email?: string;
+  displayName?: string;
+  totalSeconds: number; // total logged time (seconds) attributed to this author across synced epics
+}
+
+interface EpicMeta {
+  status?: string;
+  storyCount: number;
+  taskCount: number;
+  bugCount: number;
 }
 
 /**
  * Sync logged hours for given Epic Keys.
- * Splits total timespent into Dev and Test Man-Days (1 MD = 28800 seconds).
+ *
+ * Dev/Test split is driven by the WORKLOG AUTHOR's role in the personnel roster
+ * (测试工程师 -> test MD, everyone else -> dev MD). When an author cannot be
+ * matched in the roster, that portion falls back to the issue-type heuristic
+ * (testIssueTypes). Also collects the Epic status and Story/Task/Bug child counts.
  */
-export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<string, EpicHours>> => {
+export const syncEpicLoggedHours = async (epicKeys: string[], roster: RosterMember[] = [], unmatchedCollector?: Record<string, UnmatchedAuthor>): Promise<Record<string, EpicHours>> => {
   const settings = await getJiraSettings();
   if (!settings) throw new Error('Jira 设置未配置 (Jira settings not configured).');
 
-  // We added jiraHoursPerDay to JiraSettings locally in settings.tsx, we need to read it here if added, default to 6.
-  // Wait, I need to make sure getJiraSettings reads it. I added it to getJiraSettings in the previous step? Yes.
   const hoursPerDay = (settings as any).hoursPerDay || 6;
   const secondsPerDay = hoursPerDay * 3600;
+  const epicLinkFieldId = settings.epicLinkFieldId || '10014';
+  const epicLinkFieldName = `customfield_${epicLinkFieldId}`;
+
+  // --- Roster-based worklog-author classifier ---
+  // Matching strategy, in order of reliability:
+  //   1. Exact match on Jira accountId / full email (provided via explicit aliases).
+  //   2. Fuzzy match on display-name / email-prefix tokens (roster name + alias tokens).
+  // Explicit aliases let users reconcile cases where the roster name differs from the
+  // Jira display name (English vs Chinese name, nickname, shared account, etc.).
+  const norm = (s: string) => (s || '').toLowerCase().replace(/\s+/g, '').trim();
+  interface AuthorMatcher { exactIds: string[]; tokens: string[]; }
+  const testMatchers: AuthorMatcher[] = [];
+  const devMatchers: AuthorMatcher[] = [];
+  roster.forEach(m => {
+    const exactIds: string[] = [];
+    const tokens: string[] = [];
+    const nm = norm(m.name);
+    if (nm) tokens.push(nm);
+    (m.aliases || []).forEach(a => {
+      const raw = (a || '').trim();
+      if (!raw) return;
+      exactIds.push(raw.toLowerCase());                       // matched against accountId / full email
+      const t = norm(raw.includes('@') ? raw.split('@')[0] : raw);
+      if (t) tokens.push(t);                                  // matched against display name / email-prefix
+    });
+    if (exactIds.length === 0 && tokens.length === 0) return;
+    (m.role === '测试工程师' ? testMatchers : devMatchers).push({ exactIds, tokens });
+  });
+  // Only collect unmatched authors when a roster is actually configured; otherwise
+  // every author would be "unmatched" and flood the prompt.
+  const hasMatchers = testMatchers.length + devMatchers.length > 0;
+  const matchAuthor = (matchers: AuthorMatcher[], exactCands: string[], nameCands: string[]) =>
+    matchers.some(mm =>
+      mm.exactIds.some(id => id.length >= 3 && exactCands.includes(id)) ||
+      mm.tokens.some(rn => rn.length >= 2 && nameCands.some(c => c === rn || c.includes(rn) || rn.includes(c)))
+    );
+  const classifyAuthor = (author: any): 'dev' | 'test' | null => {
+    const accId = (author?.accountId || '').toLowerCase();
+    const email = (author?.emailAddress || '').toLowerCase();
+    const exactCands = [accId, email].filter(Boolean);
+    const nameCands = [norm(author?.displayName), norm(email.split('@')[0])].filter(Boolean);
+    if (matchAuthor(testMatchers, exactCands, nameCands)) return 'test';
+    if (matchAuthor(devMatchers, exactCands, nameCands)) return 'dev';
+    return null;
+  };
+
+  // Paginate the dedicated worklog endpoint when the inline `worklog` field is truncated.
+  const fetchAllWorklogs = async (issueKey: string): Promise<any[]> => {
+    const all: any[] = [];
+    let startAt = 0;
+    for (;;) {
+      const data = await fetchFromJira(`issue/${encodeURIComponent(issueKey)}/worklog?startAt=${startAt}&maxResults=100`, settings);
+      const batch = data.worklogs || [];
+      all.push(...batch);
+      const total = data.total ?? all.length;
+      startAt += batch.length;
+      if (batch.length === 0 || all.length >= total) break;
+    }
+    return all;
+  };
 
   const result: Record<string, EpicHours> = {};
   epicKeys.forEach(key => {
-    if (key) result[key] = { epicKey: key, totalLoggedMd: 0, devLoggedMd: 0, testLoggedMd: 0 };
+    if (key) result[key] = { epicKey: key, totalLoggedMd: 0, devLoggedMd: 0, testLoggedMd: 0, storyCount: 0, taskCount: 0, bugCount: 0 };
   });
+
+  // Per physical-Epic metadata (status + child counts), propagated to user keys at the end.
+  const epicMeta: Record<string, EpicMeta> = {};
+  const ensureMeta = (k: string): EpicMeta => (epicMeta[k] || (epicMeta[k] = { storyCount: 0, taskCount: 0, bugCount: 0 }));
 
   const validUserKeys = epicKeys
     .map(k => k ? k.toString().replace(/['"]/g, '').trim() : '')
@@ -140,7 +247,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
         const body: Record<string, any> = {
           jql: verifyJql,
           maxResults: 100,
-          fields: ['key'],
+          fields: ['key', 'status'],
         };
         if (nextPageToken) body.nextPageToken = nextPageToken;
         
@@ -149,6 +256,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
           const epics = data.issues || [];
           epics.forEach((epic: any) => {
             if (epic.key) {
+              if (epic.fields?.status?.name) ensureMeta(epic.key).status = epic.fields.status.name;
               const matchedKey = subChunk.find(k => k.toLowerCase() === epic.key.toLowerCase());
               if (matchedKey) {
                 if (!epicKeyToUserInputs[epic.key]) {
@@ -162,7 +270,8 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
           });
           nextPageToken = data.nextPageToken;
           hasMore = !!nextPageToken;
-        } catch (e) {
+        } catch (e: any) {
+          if (e.message === 'JIRA_AUTH_ERROR') throw e;
           console.warn("Standard epic verification failed", e);
           hasMore = false;
         }
@@ -202,7 +311,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
       const body: Record<string, any> = {
         jql: epicSearchJql,
         maxResults: 100,
-        fields: ['summary'],
+        fields: ['summary', 'status'],
       };
       if (nextPageToken) body.nextPageToken = nextPageToken;
       
@@ -212,6 +321,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
         epics.forEach((epic: any) => {
             const summary = epic.fields.summary || '';
             const cleanSummary = summary.toLowerCase().replace(/^[\[\s]+/, '');
+            if (epic.fields?.status?.name) ensureMeta(epic.key).status = epic.fields.status.name;
             
             for (const name of fuzzyNames) {
                 const cleanName = name.toLowerCase().replace(/^[\[\s]+/, '');
@@ -229,7 +339,8 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
         });
         nextPageToken = data.nextPageToken;
         hasMore = !!nextPageToken;
-      } catch (e) {
+      } catch (e: any) {
+        if (e.message === 'JIRA_AUTH_ERROR') throw e;
         console.warn("Epic fuzzy search failed", e);
         hasMore = false;
       }
@@ -251,7 +362,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
     // targetEpicKeys only contains standard Jira keys discovered from Step 1,
     // so using 'parent in' and 'issueKey in' is 100% safe. We remove projectJql constraint here to avoid
     // skipping child issues that belong to different projects.
-    const jql = `(parent in (${chunkStr}) OR cf[10014] in (${chunkStr}) OR issueKey in (${chunkStr}))`;
+    const jql = `(parent in (${chunkStr}) OR cf[${epicLinkFieldId}] in (${chunkStr}) OR issueKey in (${chunkStr}))`;
 
     let nextPageToken: string | undefined;
     let hasMore = true;
@@ -260,70 +371,145 @@ export const syncEpicLoggedHours = async (epicKeys: string[]): Promise<Record<st
       const body: Record<string, any> = {
         jql,
         maxResults: 100,
-        fields: ['parent', 'customfield_10014', 'issuetype', 'timespent', 'aggregatetimespent', 'timetracking', 'summary'],
+        fields: ['parent', epicLinkFieldName, 'issuetype', 'timespent', 'aggregatetimespent', 'timetracking', 'summary', 'status', 'worklog'],
       };
       if (nextPageToken) body.nextPageToken = nextPageToken;
       
       const data = await fetchFromJira('search/jql', settings, 'POST', body);
       const issues = data.issues || [];
-      
-      issues.forEach((issue: any) => {
+
+      for (const issue of issues) {
         let actualKey = issue.key;
         if (issue.fields.parent && issue.fields.parent.key) {
           actualKey = issue.fields.parent.key;
-        } else if (issue.fields.customfield_10014) {
-          actualKey = issue.fields.customfield_10014;
+        } else if (issue.fields[epicLinkFieldName]) {
+          actualKey = issue.fields[epicLinkFieldName];
         }
 
-        // If the issue is the Epic itself (issue.key === actualKey), 
-        // we MUST use timespent (not aggregatetimespent) to avoid double counting 
-        // the child issues (Stories/Tasks) which are processed separately in this loop.
         const isEpicItself = issue.key.toLowerCase() === actualKey.toLowerCase();
-        
-        let timeSpentSeconds = 0;
+        const issueTypeName = issue.fields.issuetype?.name || '';
+        const meta = ensureMeta(actualKey);
+
         if (isEpicItself) {
-          timeSpentSeconds = 
-            issue.fields.timespent || 
-            issue.fields.timetracking?.timeSpentSeconds || 
-            0;
+          // Also capture status for epics reached directly via `issueKey in (...)`.
+          if (issue.fields.status?.name) meta.status = issue.fields.status.name;
         } else {
-          timeSpentSeconds = 
-            issue.fields.aggregatetimespent || 
-            issue.fields.timespent || 
-            issue.fields.timetracking?.timeSpentSeconds || 
-            0;
+          // Tally child issue types (Story / Task / Bug), excluding sub-tasks. Names
+          // may be English or Chinese depending on the Jira instance.
+          const tn = issueTypeName.toLowerCase();
+          const isSub = tn.includes('sub') || issueTypeName.includes('子');
+          if (!isSub) {
+            if (tn.includes('story') || issueTypeName.includes('故事')) meta.storyCount += 1;
+            else if (tn.includes('bug') || tn.includes('defect') || issueTypeName.includes('缺陷')) meta.bugCount += 1;
+            else if (tn.includes('task') || issueTypeName.includes('任务')) meta.taskCount += 1;
+          }
         }
 
-        if (timeSpentSeconds <= 0) return;
+        // If the issue is the Epic itself, use timespent (not aggregatetimespent) to
+        // avoid double-counting child issues processed separately in this loop.
+        const timeSpentSeconds = isEpicItself
+          ? (issue.fields.timespent || issue.fields.timetracking?.timeSpentSeconds || 0)
+          : (issue.fields.aggregatetimespent || issue.fields.timespent || issue.fields.timetracking?.timeSpentSeconds || 0);
 
-        // Determine if it's a test issue
-        const issueTypeName = issue.fields.issuetype?.name || '';
+        if (timeSpentSeconds <= 0) continue;
+
+        const matchedUserKeys = epicKeyToUserInputs[actualKey];
+        if (!matchedUserKeys) continue;
+
+        // Issue-type heuristic used as the fallback for un-rostered worklog authors.
         const isTestIssue = settings.testIssueTypes!
           .split(',')
           .map(t => t.trim().toLowerCase())
           .some(t => t && issueTypeName.toLowerCase().includes(t));
 
-        // Accumulate hours to ALL user input keys that matched this Epic
-        const matchedUserKeys = epicKeyToUserInputs[actualKey];
-        if (matchedUserKeys) {
-            const md = timeSpentSeconds / secondsPerDay;
-            for (const userInputKey of matchedUserKeys) {
-                if (result[userInputKey]) {
-                    result[userInputKey].totalLoggedMd += md;
-                    if (isTestIssue) {
-                      result[userInputKey].testLoggedMd += md;
-                    } else {
-                      result[userInputKey].devLoggedMd += md;
-                    }
-                }
-            }
+        // Split this issue's logged time by worklog-author role. Worklogs only cover
+        // the issue's OWN time, so we apply the role ratio to the full timeSpentSeconds
+        // (which may include sub-task roll-up) and route unmatched authors via the
+        // issue-type fallback. Totals stay exact regardless.
+        let worklogs: any[] = issue.fields.worklog?.worklogs || [];
+        const wlTotal = issue.fields.worklog?.total ?? worklogs.length;
+        if (wlTotal > worklogs.length) {
+          try {
+            worklogs = await fetchAllWorklogs(issue.key);
+          } catch (e: any) {
+            if (e.message === 'JIRA_AUTH_ERROR') throw e;
+            // Keep the truncated inline set on failure.
+          }
         }
-      });
+
+        let devSec = 0, testSec = 0, unknownSec = 0;
+        for (const wl of worklogs) {
+          const s = wl.timeSpentSeconds || 0;
+          if (s <= 0) continue;
+          const role = classifyAuthor(wl.author);
+          if (role === 'test') testSec += s;
+          else if (role === 'dev') devSec += s;
+          else {
+            unknownSec += s;
+            // Record this author so the user can later map them to a roster member.
+            if (unmatchedCollector && hasMatchers && wl.author) {
+              const a = wl.author;
+              const ukey = (a.accountId || a.emailAddress || a.displayName || '').toLowerCase();
+              if (ukey) {
+                const existing = unmatchedCollector[ukey] || (unmatchedCollector[ukey] = {
+                  accountId: a.accountId,
+                  email: a.emailAddress,
+                  displayName: a.displayName,
+                  totalSeconds: 0,
+                });
+                existing.totalSeconds += s;
+              }
+            }
+          }
+        }
+        const wlSum = devSec + testSec + unknownSec;
+
+        const md = timeSpentSeconds / secondsPerDay;
+        let devMd: number, testMd: number;
+        if (wlSum > 0) {
+          devMd = md * (devSec / wlSum);
+          testMd = md * (testSec / wlSum);
+          const unknownMd = md * (unknownSec / wlSum);
+          if (isTestIssue) testMd += unknownMd; else devMd += unknownMd;
+        } else {
+          // No worklog detail (e.g. time only on sub-tasks): fall back to issue type.
+          if (isTestIssue) { testMd = md; devMd = 0; } else { devMd = md; testMd = 0; }
+        }
+
+        for (const userInputKey of matchedUserKeys) {
+          const r = result[userInputKey];
+          if (!r) continue;
+          r.totalLoggedMd += md;
+          r.devLoggedMd += devMd;
+          r.testLoggedMd += testMd;
+        }
+      }
 
       nextPageToken = data.nextPageToken;
       hasMore = !!nextPageToken;
     }
   }
+
+  // Propagate Epic status + child counts to every user input key that mapped to it.
+  // A single user keyword (especially via fuzzy match) can resolve to MULTIPLE physical
+  // Epics, so we aggregate the DISTINCT statuses instead of letting the last one win,
+  // while child counts are summed across all matched Epics.
+  const statusSets: Record<string, Set<string>> = {};
+  Object.entries(epicKeyToUserInputs).forEach(([epicKey, userKeys]) => {
+    const meta = epicMeta[epicKey];
+    if (!meta) return;
+    userKeys.forEach(uk => {
+      const r = result[uk];
+      if (!r) return;
+      if (meta.status) (statusSets[uk] || (statusSets[uk] = new Set<string>())).add(meta.status);
+      r.storyCount += meta.storyCount;
+      r.taskCount += meta.taskCount;
+      r.bugCount += meta.bugCount;
+    });
+  });
+  Object.entries(statusSets).forEach(([uk, set]) => {
+    if (result[uk] && set.size > 0) result[uk].status = Array.from(set).join(' / ');
+  });
 
   return result;
 };

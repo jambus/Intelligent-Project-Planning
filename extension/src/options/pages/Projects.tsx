@@ -40,6 +40,14 @@ export const Projects = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Import REPLACES all existing projects (clear + bulkAdd). Warn first.
+    if ((projects?.length || 0) > 0) {
+      if (!window.confirm(`导入将清空并覆盖现有的 ${projects!.length} 个项目（不可撤销）。是否继续？`)) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    }
+
     setIsImporting(true);
     setError(null);
     try {
@@ -120,6 +128,7 @@ export const Projects = () => {
           <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-xs uppercase tracking-wider">
+                <th className="p-4 font-semibold">排期模式</th>
                 <th className="p-4 font-semibold w-16">顺序</th>
                 <th className="p-4 font-semibold min-w-[200px]">项目名称 / Epic</th>
                 <th className="p-4 font-semibold">优先级</th>
@@ -134,7 +143,7 @@ export const Projects = () => {
             <tbody>
               {(!displayProjects || displayProjects.length === 0) ? (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center">
+                  <td colSpan={10} className="p-12 text-center">
                     <div className="flex flex-col items-center justify-center text-gray-400 space-y-2">
                       <Info size={40} className="opacity-20" />
                       <p>暂无项目数据，请点击上方按钮导入 CSV/Excel 文件。</p>
@@ -144,6 +153,19 @@ export const Projects = () => {
               ) : null}
               {displayProjects?.map((p, index) => (
                 <tr key={p.id} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors group">
+                  <td className="p-4">
+                    <select
+                      value={p.schedulingStrategy || 'focused'}
+                      onChange={(e) => {
+                        db.projects.update(p.id!, { schedulingStrategy: e.target.value as any });
+                      }}
+                      className="appearance-none py-1 px-2 text-xs font-bold text-gray-600 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-white w-24 hover:border-gray-300"
+                    >
+                      <option value="focused">专注模式</option>
+                      <option value="balanced">均衡模式</option>
+                      <option value="urgent">紧急模式</option>
+                    </select>
+                  </td>
                   <td className="p-4 text-xs font-mono text-gray-400">#{index + 1}</td>
                   <td className="p-4">
                     <div className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{p.name}</div>

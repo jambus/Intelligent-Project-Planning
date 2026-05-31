@@ -1,8 +1,8 @@
 {
   "name": "irp-root",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "npm run dev --prefix extension",
     "build": "npm run build --prefix extension",

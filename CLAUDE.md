@@ -32,8 +32,11 @@ Chrome Extension (Manifest V3) — Local-first R&D resource scheduler with AI-po
 - **Priority = insertion order**: CSV import order determines project priority (auto-increment DB ID). No manual sort in UI.
 - **5 standard roles**: 前端/后端/APP/全栈 → dev work only; 测试工程师 → test work only
 - **Data stored in**: `chrome.storage.local` for config/API keys, IndexedDB (via Dexie) for business data
-- **Holidays hardcoded** in `dateUtils.ts` for 2026 — will need maintenance for future years
+- **Holidays hardcoded** in `dateUtils.ts` for 2026 — will need maintenance for future years. Scheduling also loads user-defined holidays via `loadHolidaysConfig()` from `db.settings` before building the working-day set.
 - **API keys never hardcoded** — read from `chrome.storage.local` via the storage utility
+- **Local date keys**: use `formatLocalDate()` for all `YYYY-MM-DD` scheduling/working-day/holiday keys — never `toISOString().split('T')[0]` (UTC shift bug).
+- **Shared gap calc**: `computeProjectGaps` in `utils/audit.ts` is the single source for both engine `runAudit` and Dashboard `runAuditForUI`; accumulate MD at full float precision, round only at final write/display.
+- **Destructive imports + cascade deletes**: project/resource import REPLACES the whole table (confirm before importing when data exists); `deleteResource`/`deleteProject` cascade-delete related `allocations`.
 
 ### Validation Requirement
 Every code modification MUST be followed by `npm run build` succeeding. The task is not complete until the build and packaging pass.

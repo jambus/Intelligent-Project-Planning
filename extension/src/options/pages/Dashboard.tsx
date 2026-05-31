@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { useScheduling } from '../../context/SchedulingContext';
-import { Users, ChevronDown, ChevronUp, ArrowRight, ClipboardList, AlertTriangle, FileWarning, Search, TriangleAlert, User, Briefcase, RefreshCcw, CheckCircle2, Settings2, Zap, X, Play } from 'lucide-react';
-import { calculateMonthlyMD, getWorkingDays } from '../../utils/dateUtils';
+import { Users, ChevronDown, ChevronUp, ArrowRight, ClipboardList, AlertTriangle, FileWarning, Search, TriangleAlert, User, Briefcase, RefreshCcw, CheckCircle2, Zap, X, Play } from 'lucide-react';
+import { getWorkingDays, getWeeksInRange, calculateWeeklyMD } from '../../utils/dateUtils';
+import { computeProjectGaps } from '../../utils/audit';
 
 export const Dashboard = () => {
   const projects = useLiveQuery(() => db.projects.toArray());
@@ -11,7 +12,7 @@ export const Dashboard = () => {
   const allocations = useLiveQuery(() => db.allocations.toArray());
   const operations = useLiveQuery(() => db.productOperations.toArray());
   
-  const { isScheduling, scheduleStatus, currentStep, error, strategy, setStrategy, handleGenerateSchedule, stopScheduling, clearError } = useScheduling();
+  const { isScheduling, scheduleStatus, currentStep, error, handleGenerateSchedule, stopScheduling, clearError } = useScheduling();
   const [groupMode, setGroupMode] = useState<'resource' | 'project'>('resource');
 
   // Collapse states
@@ -34,57 +35,46 @@ export const Dashboard = () => {
   const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
 
-  const displayMonths = useMemo(() => {
-    const list = [];
-    for (let m = startMonth; m <= endMonth; m++) {
-      list.push({ year: selectedYear, month: m });
-    }
-    return list;
+  const displayWeeks = useMemo(() => {
+    return getWeeksInRange(startMonth, endMonth, selectedYear);
   }, [selectedYear, startMonth, endMonth]);
 
-  // UI-only audit logic for display
-  const runAuditForUI = (currentProjects: any[], currentResources: any[], currentAllocations: any[]) => {
-    const gaps = currentProjects.map(p => {
-      const pAllocations = currentAllocations.filter(a => Number(a.projectId) === Number(p.id));
-      let dev = 0, test = 0;
-      pAllocations.forEach(a => {
-        const res = currentResources.find(r => Number(r.id) === Number(a.resourceId));
-        const workingDays = getWorkingDays(new Date(a.startDate), new Date(a.endDate));
-        const md = Math.round((workingDays * (a.allocationPercentage || 0)) / 100);
-        if (a.allocationType === 'test' || res?.role === '测试工程师') test += md; else dev += md;
-      });
-      const devTotal = p.devTotalMd || 0;
-      const testTotal = p.testTotalMd || 0;
-      let effectiveDevTotal = devTotal;
-      let effectiveTestTotal = testTotal;
-      
-      if ((p.testLoggedMd || 0) > 0) {
-        effectiveDevTotal = Math.max(0, devTotal - (p.devLoggedMd || 0));
-        effectiveTestTotal = Math.max(0, testTotal - (p.testLoggedMd || 0));
+  const displayWeeksGrouped = useMemo(() => {
+    const groups: { month: number, span: number }[] = [];
+    displayWeeks.forEach(w => {
+      const last = groups[groups.length - 1];
+      if (last && last.month === w.month) {
+        last.span += 1;
       } else {
-        const logged = p.totalLoggedMd || 0;
-        effectiveDevTotal = Math.max(0, devTotal - logged);
-        const remainingLogged = Math.max(0, logged - devTotal);
-        effectiveTestTotal = Math.max(0, testTotal - remainingLogged);
+        groups.push({ month: w.month, span: 1 });
       }
-      return { ...p, devGap: Math.max(0, effectiveDevTotal - dev), testGap: Math.max(0, effectiveTestTotal - test) };
-    }).filter(p => p.devGap >= 1 || p.testGap >= 1);
+    });
+    return groups;
+  }, [displayWeeks]);
+
+  // UI-only audit logic for display. Project gaps use the shared auditor so the
+  // dashboard never drifts from the scheduling engine; idle is computed against
+  // the currently displayed week range for the grid.
+  const runAuditForUI = (currentProjects: any[], currentResources: any[], currentAllocations: any[]) => {
+    const gaps = computeProjectGaps(currentProjects, currentResources, currentAllocations)
+      .filter(p => Math.ceil(p.devGap) >= 1 || Math.ceil(p.testGap) >= 1);
 
     const idle = currentResources.map(r => {
       const rAllocations = currentAllocations.filter(a => Number(a.resourceId) === Number(r.id));
+      // Accumulate at full precision; round once at the end (#8).
       let totalAllocatedMdInRange = 0;
-      displayMonths.forEach(m => {
+      displayWeeks.forEach(w => {
         rAllocations.forEach(a => {
-          totalAllocatedMdInRange += Math.round(calculateMonthlyMD(a.startDate, a.endDate, a.allocationPercentage, m.year, m.month));
+          totalAllocatedMdInRange += calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week);
         });
       });
-      
+
       const rangeStart = new Date(selectedYear, startMonth - 1, 1);
       const rangeEnd = new Date(selectedYear, endMonth, 0);
       const totalWorkingDaysInRange = getWorkingDays(rangeStart, rangeEnd);
-      const capacityMd = Math.round((totalWorkingDaysInRange * r.capacity) / 100);
+      const capacityMd = (totalWorkingDaysInRange * r.capacity) / 100;
       const utilization = capacityMd > 0 ? (totalAllocatedMdInRange / capacityMd) * 100 : 0;
-      return { ...r, idleMd: Math.max(0, capacityMd - totalAllocatedMdInRange), utilization };
+      return { ...r, idleMd: Math.max(0, Math.round(capacityMd - totalAllocatedMdInRange)), utilization };
     }).filter(r => r.idleMd >= 1);
 
     return { gaps, idle };
@@ -96,26 +86,26 @@ export const Dashboard = () => {
     const pending = projects.filter(p => p.devTotalMd === 0 && p.testTotalMd === 0);
     const { gaps, idle } = runAuditForUI(ready, resources, allocations);
     return { readyProjects: ready, pendingProjects: pending, projectGaps: gaps, resourceIdle: idle };
-  }, [projects, resources, allocations, selectedYear, startMonth, endMonth, displayMonths]);
+  }, [projects, resources, allocations, selectedYear, startMonth, endMonth, displayWeeks]);
 
   const scheduledProjectsList = useMemo(() => {
     if (!projects || !allocations || !resources) return [];
-    return projects.filter(p => {
-      const pAllocs = allocations.filter(a => Number(a.projectId) === Number(p.id));
-      if (pAllocs.length === 0) return false;
-      const hasDevReq = p.devTotalMd > 0, hasTestReq = p.testTotalMd > 0;
-      const hasDevAlloc = pAllocs.some(a => {
-        const res = resources.find(r => Number(r.id) === Number(a.resourceId));
-        return a.allocationType === 'dev' || (res && ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(res.role));
-      });
-      const hasTestAlloc = pAllocs.some(a => {
-        const res = resources.find(r => Number(r.id) === Number(a.resourceId));
-        return a.allocationType === 'test' || (res && res.role === '测试工程师');
-      });
-      if (hasDevReq && hasTestReq) return hasDevAlloc && hasTestAlloc;
-      if (hasDevReq) return hasDevAlloc;
-      if (hasTestReq) return hasTestAlloc;
-      return false;
+    const ready = projects.filter(p => p.devTotalMd > 0 || p.testTotalMd > 0);
+    // Single source of truth: a required dimension counts as "done" when its
+    // remaining gap (after subtracting Jira-consumed MD AND existing allocations)
+    // drops below 1 MD. This credits work already consumed in Jira even when no
+    // new allocation was created for it, so a project whose dev/test was finished
+    // in Jira still shows as 已排 instead of silently disappearing.
+    const gapById = new Map(
+      computeProjectGaps(ready, resources, allocations).map(g => [Number(g.id), g])
+    );
+    return ready.filter(p => {
+      const g = gapById.get(Number(p.id));
+      if (!g) return false;
+      const devDone = p.devTotalMd <= 0 || Math.ceil(g.devGap) < 1;
+      const testDone = p.testTotalMd <= 0 || Math.ceil(g.testGap) < 1;
+      // 已排满 = every required dimension's remaining work is fully covered.
+      return devDone && testDone;
     }).map(p => {
       const pAllocs = allocations.filter(a => Number(a.projectId) === Number(p.id));
       const devs = Array.from(new Set(pAllocs.filter(a => {
@@ -126,7 +116,10 @@ export const Dashboard = () => {
         const res = resources.find(r => Number(r.id) === Number(a.resourceId));
         return a.allocationType === 'test' || (res && res.role === '测试工程师');
       }).map(a => resources.find(r => r.id === a.resourceId)?.name))).filter(Boolean);
-      return { ...p, assignedDevs: devs.join(', '), assignedTesters: testers.join(', '), allPersonnel: [...new Set([...devs, ...testers])].join(', ') };
+      // A required dimension fully covered by Jira consumption has no new allocation.
+      const devViaJira = p.devTotalMd > 0 && devs.length === 0;
+      const testViaJira = p.testTotalMd > 0 && testers.length === 0;
+      return { ...p, assignedDevs: devs.join(', '), assignedTesters: testers.join(', '), allPersonnel: [...new Set([...devs, ...testers])].join(', '), devViaJira, testViaJira };
     });
   }, [projects, allocations, resources]);
 
@@ -177,14 +170,6 @@ export const Dashboard = () => {
             </select>
           </div>
 
-          <div className="flex items-center space-x-2 px-2 border-l border-gray-100">
-            <Settings2 size={14} className="text-gray-400" />
-            <select value={strategy} onChange={(e) => setStrategy(e.target.value as any)} className="appearance-none py-2 pr-4 text-sm font-medium text-gray-600 border-none focus:ring-0 cursor-pointer bg-transparent">
-              <option value="focused">专注模式 (1人1项目 100%)</option>
-              <option value="balanced">均衡模式 (分时多任务 50%)</option>
-              <option value="urgent">紧急模式 (加急推进 100%+)</option>
-            </select>
-          </div>
 
           {isScheduling ? (
             <button 
@@ -315,12 +300,21 @@ export const Dashboard = () => {
                       <td className="p-4 text-gray-600 font-medium">{p.projectTechLead || '-'}</td>
                       <td className="p-4 text-gray-600 font-medium">{p.projectQualityLead || '-'}</td>
                       <td className="p-4">
-                        <div className="flex flex-wrap gap-1">
-                          {p.allPersonnel.split(', ').map((name: string) => (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          {p.allPersonnel && p.allPersonnel.split(', ').map((name: string) => (
                             <span key={name} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold">
                               {name}
                             </span>
                           ))}
+                          {p.devViaJira && (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold">开发·Jira工时已消耗</span>
+                          )}
+                          {p.testViaJira && (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold">测试·Jira工时已消耗</span>
+                          )}
+                          {!p.allPersonnel && !p.devViaJira && !p.testViaJira && (
+                            <span className="text-gray-400 text-[10px]">-</span>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -355,44 +349,72 @@ export const Dashboard = () => {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-gray-200 text-gray-400 font-black uppercase tracking-widest bg-gray-50/10">
-                  <th className="p-4 min-w-[150px]">{groupMode === 'resource' ? '研发资源' : '承接项目'}</th>
-                  <th className="p-4 min-w-[200px]">{groupMode === 'resource' ? '承接项目' : '参与人员'}</th>
-                  <th className="p-4 text-center">投入比</th>
-                  {displayMonths.map(m => <th key={`${m.year}-${m.month}`} className="p-4 text-center border-l border-gray-50 min-w-[70px]">{m.month}月</th>)}
+                  <th rowSpan={2} className="p-4 min-w-[150px]">{groupMode === 'resource' ? '研发资源' : '承接项目'}</th>
+                  <th rowSpan={2} className="p-4 min-w-[200px]">{groupMode === 'resource' ? '承接项目' : '参与人员'}</th>
+                  <th rowSpan={2} className="p-4 text-center">投入比</th>
+                  {displayWeeksGrouped.map((g, idx) => <th key={idx} colSpan={g.span} className="py-2 text-center border-l border-gray-200 text-gray-500 bg-gray-100/50">{g.month} 月</th>)}
+                </tr>
+                <tr className="border-b border-gray-200 text-gray-400 font-black uppercase tracking-widest bg-gray-50/10">
+                  {displayWeeks.map(w => <th key={`${w.year}-${w.week}`} className="py-2 text-center border-l border-gray-50 min-w-[70px] text-[10px]">{w.label}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {groupMode === 'resource' ? allocations?.map((alloc) => {
-                  const resource = resources?.find(r => Number(r.id) === Number(alloc.resourceId));
-                  const isOp = Number(alloc.projectId) <= -1000000;
-                  const opId = isOp ? -Number(alloc.projectId) - 1000000 : null;
-                  const operation = isOp ? operations?.find(o => Number(o.id) === opId) : null;
-                  const project = isOp ? null : projects?.find(p => Number(p.id) === Number(alloc.projectId));
-                  const projName = isOp ? `[运维] ${operation?.productName || 'Unknown'}` : (project?.name || 'Unknown');
-                  return (
-                    <tr key={alloc.id} className="border-b border-gray-100 hover:bg-blue-50/20 transition-colors">
-                      <td className="p-4 border-r border-gray-50 bg-gray-50/5"><div className="font-black text-gray-900">{resource?.name || 'Unknown'}</div><div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">{resource?.role}</div></td>
-                      <td className="p-4"><div className="text-blue-600 font-black leading-tight">{projName}</div><div className="text-[10px] text-gray-400 mt-1 font-medium">{alloc.startDate} ~ {alloc.endDate}</div></td>
-                      <td className="p-4 text-center"><span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[9px] font-black border border-green-100">{alloc.allocationPercentage}%</span></td>
-                      {displayMonths.map(m => {
-                        const md = Math.round(calculateMonthlyMD(alloc.startDate, alloc.endDate, alloc.allocationPercentage, m.year, m.month));
-                        return <td key={`${m.year}-${m.month}`} className={`p-4 text-center font-mono font-black border-l border-gray-50/50 ${md > 0 ? 'text-gray-900 bg-blue-50/10' : 'text-gray-200'}`}>{md > 0 ? md : '-'}</td>;
-                      })}
-                    </tr>
-                  );
-                }) : [
+                {groupMode === 'resource' ? (() => {
+                  const map = new Map<string, any[]>();
+                  allocations?.forEach(a => {
+                    const key = `${a.resourceId}_${a.projectId}`;
+                    if (!map.has(key)) map.set(key, []);
+                    map.get(key)!.push(a);
+                  });
+                  return Array.from(map.values()).map((group) => {
+                    const alloc = group[0];
+                    const resource = resources?.find(r => Number(r.id) === Number(alloc.resourceId));
+                    const isOp = Number(alloc.projectId) <= -1000000;
+                    const opId = isOp ? -Number(alloc.projectId) - 1000000 : null;
+                    const operation = isOp ? operations?.find(o => Number(o.id) === opId) : null;
+                    const project = isOp ? null : projects?.find(p => Number(p.id) === Number(alloc.projectId));
+                    const projName = isOp ? `[运维] ${operation?.productName || 'Unknown'}` : (project?.name || 'Unknown');
+                    
+                    const minStart = group.map(a => a.startDate).sort()[0];
+                    const maxEnd = group.map(a => a.endDate).sort().reverse()[0];
+                    const percs = Array.from(new Set(group.map(a => a.allocationPercentage)));
+                    const percStr = percs.length === 1 ? `${percs[0]}%` : 'Mixed';
+
+                    return (
+                      <tr key={`${alloc.resourceId}_${alloc.projectId}`} className="border-b border-gray-100 hover:bg-blue-50/20 transition-colors">
+                        <td className="p-4 border-r border-gray-50 bg-gray-50/5"><div className="font-black text-gray-900">{resource?.name || 'Unknown'}</div><div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">{resource?.role}</div></td>
+                        <td className="p-4"><div className="text-blue-600 font-black leading-tight">{projName}</div><div className="text-[10px] text-gray-400 mt-1 font-medium">{minStart} ~ {maxEnd}</div></td>
+                        <td className="p-4 text-center"><span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[9px] font-black border border-green-100">{percStr}</span></td>
+                        {displayWeeks.map(w => {
+                          const md = group.reduce((sum, a) => sum + Math.round(calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week)), 0);
+                          return <td key={`${w.year}-${w.week}`} className={`p-4 text-center font-mono font-black border-l border-gray-50/50 ${md > 0 ? 'text-gray-900 bg-blue-50/10' : 'text-gray-200'}`}>{md > 0 ? md : '-'}</td>;
+                        })}
+                      </tr>
+                    );
+                  });
+                })() : [
                   ...(projects?.filter(p => allocations?.some(a => Number(a.projectId) === Number(p.id))).map(p => {
                     const projectAllocations = allocations?.filter(a => Number(a.projectId) === Number(p.id)) || [];
-                    return projectAllocations.map((alloc, idx) => {
+                    const map = new Map<string, any[]>();
+                    projectAllocations.forEach(a => {
+                      const key = `${a.resourceId}`;
+                      if (!map.has(key)) map.set(key, []);
+                      map.get(key)!.push(a);
+                    });
+                    const grouped = Array.from(map.values());
+                    return grouped.map((group, idx) => {
+                      const alloc = group[0];
                       const resource = resources?.find(r => Number(r.id) === Number(alloc.resourceId));
+                      const percs = Array.from(new Set(group.map(a => a.allocationPercentage)));
+                      const percStr = percs.length === 1 ? `${percs[0]}%` : 'Mixed';
                       return (
-                        <tr key={alloc.id} className={`border-b border-gray-100 hover:bg-indigo-50/20 transition-colors ${idx === 0 ? 'border-t-2 border-t-gray-100' : ''}`}>
+                        <tr key={`${p.id}_${alloc.resourceId}`} className={`border-b border-gray-100 hover:bg-indigo-50/20 transition-colors ${idx === 0 ? 'border-t-2 border-t-gray-100' : ''}`}>
                           <td className="p-4 border-r border-gray-50 bg-indigo-50/5">{idx === 0 && <div className="font-black text-indigo-700 leading-tight">{p.name}</div>}</td>
                           <td className="p-4"><div className="font-bold text-gray-900">{resource?.name || 'Unknown'}</div><div className="text-[9px] text-gray-400 font-bold uppercase">{resource?.role}</div></td>
-                          <td className="p-4 text-center"><span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[9px] font-black border border-green-100">{alloc.allocationPercentage}%</span></td>
-                          {displayMonths.map(m => {
-                            const md = Math.round(calculateMonthlyMD(alloc.startDate, alloc.endDate, alloc.allocationPercentage, m.year, m.month));
-                            return <td key={`${m.year}-${m.month}`} className={`p-4 text-center font-mono font-black border-l border-gray-50/50 ${md > 0 ? 'text-gray-900 bg-blue-50/10' : 'text-gray-200'}`}>{md > 0 ? md : '-'}</td>;
+                          <td className="p-4 text-center"><span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[9px] font-black border border-green-100">{percStr}</span></td>
+                          {displayWeeks.map(w => {
+                            const md = group.reduce((sum, a) => sum + Math.round(calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week)), 0);
+                            return <td key={`${w.year}-${w.week}`} className={`p-4 text-center font-mono font-black border-l border-gray-50/50 ${md > 0 ? 'text-gray-900 bg-blue-50/10' : 'text-gray-200'}`}>{md > 0 ? md : '-'}</td>;
                           })}
                         </tr>
                       );
@@ -400,16 +422,26 @@ export const Dashboard = () => {
                   }) || []),
                   ...(operations?.filter(op => allocations?.some(a => Number(a.projectId) === -(Number(op.id) + 1000000))).map(op => {
                     const opAllocations = allocations?.filter(a => Number(a.projectId) === -(Number(op.id) + 1000000)) || [];
-                    return opAllocations.map((alloc, idx) => {
+                    const map = new Map<string, any[]>();
+                    opAllocations.forEach(a => {
+                      const key = `${a.resourceId}`;
+                      if (!map.has(key)) map.set(key, []);
+                      map.get(key)!.push(a);
+                    });
+                    const grouped = Array.from(map.values());
+                    return grouped.map((group, idx) => {
+                      const alloc = group[0];
                       const resource = resources?.find(r => Number(r.id) === Number(alloc.resourceId));
+                      const percs = Array.from(new Set(group.map(a => a.allocationPercentage)));
+                      const percStr = percs.length === 1 ? `${percs[0]}%` : 'Mixed';
                       return (
-                        <tr key={alloc.id} className={`border-b border-gray-100 hover:bg-indigo-50/20 transition-colors ${idx === 0 ? 'border-t-2 border-t-gray-100' : ''}`}>
+                        <tr key={`${op.id}_${alloc.resourceId}`} className={`border-b border-gray-100 hover:bg-indigo-50/20 transition-colors ${idx === 0 ? 'border-t-2 border-t-gray-100' : ''}`}>
                           <td className="p-4 border-r border-gray-50 bg-indigo-50/5">{idx === 0 && <div className="font-black text-indigo-700 leading-tight">[运维] {op.productName}</div>}</td>
                           <td className="p-4"><div className="font-bold text-gray-900">{resource?.name || 'Unknown'}</div><div className="text-[9px] text-gray-400 font-bold uppercase">{resource?.role}</div></td>
-                          <td className="p-4 text-center"><span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[9px] font-black border border-green-100">{alloc.allocationPercentage}%</span></td>
-                          {displayMonths.map(m => {
-                            const md = Math.round(calculateMonthlyMD(alloc.startDate, alloc.endDate, alloc.allocationPercentage, m.year, m.month));
-                            return <td key={`${m.year}-${m.month}`} className={`p-4 text-center font-mono font-black border-l border-gray-50/50 ${md > 0 ? 'text-gray-900 bg-blue-50/10' : 'text-gray-200'}`}>{md > 0 ? md : '-'}</td>;
+                          <td className="p-4 text-center"><span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[9px] font-black border border-green-100">{percStr}</span></td>
+                          {displayWeeks.map(w => {
+                            const md = group.reduce((sum, a) => sum + Math.round(calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week)), 0);
+                            return <td key={`${w.year}-${w.week}`} className={`p-4 text-center font-mono font-black border-l border-gray-50/50 ${md > 0 ? 'text-gray-900 bg-blue-50/10' : 'text-gray-200'}`}>{md > 0 ? md : '-'}</td>;
                           })}
                         </tr>
                       );

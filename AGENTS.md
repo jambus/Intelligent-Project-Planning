@@ -55,6 +55,12 @@ For build/setup details: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 - `useLiveQuery()` (Dexie) triggers async re-renders on DB mutations — be careful with allocation logic
 - Content script only matches `*://*.atlassian.net/browse/*`
 - The `@crxjs/vite-plugin` is a beta (2.0.0-beta.33) — check compatibility when upgrading Vite
+- **Calendar dates**: Use `formatLocalDate(date)` from `utils/dateUtils.ts` for any `YYYY-MM-DD` date key. Never use `toISOString().split('T')[0]` for scheduling/working-day/holiday logic — it shifts by a day in UTC+8.
+- **Holiday config**: Scheduling must `await loadHolidaysConfig()` before building the working-day set, otherwise user-defined holidays in `db.settings` are ignored.
+- **Gap calculation**: `runAudit` (engine) and `runAuditForUI` (Dashboard) share `computeProjectGaps` in `utils/audit.ts`. Keep MD accumulation at full float precision; round only at final write/display.
+- **Imports are destructive**: project/resource file import does `db.<table>.clear()` then `bulkAdd` — it REPLACES the whole table. UI must confirm before import when data exists.
+- **Cascade deletes**: `deleteResource`/`deleteProject` also delete related `allocations` to avoid orphan schedule rows. Preserve this when editing the service layer.
+- **PRD doc is UTF-8 with very long lines**: the buffer-based edit tools may read a stale/empty view of `docs/intelligent-resource-planner.md`. Verify against disk if an edit fails to match.
 
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.

@@ -7,6 +7,7 @@ export interface Resource {
   capacity: number; // e.g., 100 (for 100%)
   skills: string[]; // JSON array of skill tags
   unavailableDates?: string[]; // Array of ISO dates when resource is on leave
+  jiraAliases?: string; // Optional Jira identities (accountId/email/display name), comma or newline separated, to reconcile name mismatches
 }
 
 export interface Project {
@@ -27,12 +28,17 @@ export interface Project {
   devLoggedMd?: number; // Synced Dev Logged MD from Jira
   testLoggedMd?: number; // Synced Test Logged MD from Jira
   lastJiraSyncAt?: number; // Timestamp of last successful Jira sync
+  jiraEpicStatus?: string; // Synced Epic status name from Jira
+  jiraStoryCount?: number; // # of Story children under the Epic
+  jiraTaskCount?: number;  // # of Task children under the Epic
+  jiraBugCount?: number;   // # of Bug children under the Epic
   projectTechLead?: string; // Project Tech Lead
   projectQualityLead?: string; // Project Quality Lead
   detailsProductDevMd?: string; // Details Product DEV MD
   detailsProductTestMd?: string; // Details Product Test MD
   techStack?: string; // Technical Stack required
   domain?: string; // Product Domain
+  schedulingStrategy?: 'balanced' | 'focused' | 'urgent'; // Strategy for AI allocation
 }
 
 export interface Allocation {
@@ -130,6 +136,16 @@ export class PlannerDatabase extends Dexie {
     });
 
     this.version(6).stores({
+      resources: '++id, name, role',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName'
+    });
+
+    this.version(7).stores({
       resources: '++id, name, role',
       projects: '++id, name, status, priority, digitalResponsible',
       allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',

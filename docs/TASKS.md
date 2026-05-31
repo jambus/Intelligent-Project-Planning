@@ -404,3 +404,65 @@
     - [x] 26.2.1 修复正则匹配过度干预问题，使得带有中括号的业务代号（如 `[TRP-123]`）能够回退走安全的 `summary ~ "key*"` 模糊检索，避免引发 Jira API 报错。
     - [x] 26.2.2 将精确 Issue Key（如纯字母数字 `PROJ-123`）增强为 `issueKey = "PROJ-123" OR summary ~ "PROJ-123*"` 双重匹配，保证 100% 覆盖率。
     - [x] 26.2.3 恢复内存级标题比对的截断逻辑 `replace(/^[\[\s]+/, '')`，完美适配含右中括号的业务标识。
+
+## v1.0.5 排期策略 Code Review 修复任务
+
+### 逻辑问题修复
+- [x] **27.1 Task 1: `focused` 模式 JS 硬兜底**
+  - 在 `applySuggestions` 中增加 `focused` 模式的硬约束检查，仅保留第一个候选人。
+- [x] **27.2 Task 2: `urgent` 模式 >100% 投入兼容**
+  - 修改 `findEarliestFitDate` 逻辑，允许 `urgent` 模式突破 100% 空闲检查。
+- [x] **27.3 Task 3: Prompt 中 `MANDATORY LEADS` 与 `focused` 语义冲突**
+  - 修改 `DEFAULT_SCHEDULING_PROMPT` 规则，消除冲突。
+- [x] **27.4 Task 4: PASS 0 `runAudit` 空项目调用语义冗余**
+  - 优化 PASS 0 中的资源空闲度获取方式。
+
+### 性能优化
+- [x] **27.5 Task 5: `updateResourceCalendar` 嵌套循环优化**
+  - 消除 O(slots × days) 的跨周遍历。
+- [x] **27.6 Task 6: `applySuggestions` 内 slot 线性搜索优化**
+  - 将 `resCalendar.find` 升级为 Map O(1) 查找。
+- [x] **27.7 Task 7: `getResourceCalendar` 重复 filter 优化**
+  - 复用 `currentAllocs.filter`。
+
+## 阶段二十八：v1.0.5 排期精准度与健壮性加固 (Phase 28: Precision & Robustness Hardening)
+
+> 来源：2026-05 排期逻辑代码审查，关联架构文档：`docs/intelligent-resource-planner.md § 3.3.13`
+
+### P0 — 核心引擎精准度 (Core Engine Precision)
+
+- [x] **DONE** **28.1 [DATE-01] 修复时区导致的工作日错位**
+    - [x] 28.1.1 在 `utils/dateUtils.ts` 新增 `formatLocalDate(date)`，基于本地 `getFullYear/getMonth/getDate` 生成 `YYYY-MM-DD`，替代会因 UTC 偏移跨日的 `toISOString().split('T')[0]`。
+    - [x] 28.1.2 `isWorkingDay`、`getWorkingDays`、`calculateEndDate` 及 `SchedulingContext` 全链路日期键统一改用 `formatLocalDate`。
+- [x] **DONE** **28.2 [DATE-02] 排期前动态加载节假日配置**
+    - [x] 28.2.1 新增 `loadHolidaysConfig()`，从 `db.settings` 的 `holidays`/`specialWorkdays` 读取并调用 `updateHolidaysConfig`，失败回退默认值。
+    - [x] 28.2.2 `handleGenerateSchedule` 在构建 `workingDaySet` 前 `await loadHolidaysConfig()`，确保用户自定义假期参与排期计算。
+- [x] **DONE** **28.3 [LOOP-01] `calculateEndDate` 死循环保护**
+    - [x] 28.3.1 用带 `MAX_ITERATIONS` 上限的有界循环替换 `while(true)`，防止极端配置（如全部为节假日）导致卡死。
+- [x] **DONE** **28.4 [AUDIT-01] 统一缺口计算与累计取整**
+    - [x] 28.4.1 新增 `utils/audit.ts` 的 `computeProjectGaps`，作为 `SchedulingContext.runAudit` 与 `Dashboard.runAuditForUI` 共享的纯函数缺口计算器。
+    - [x] 28.4.2 人天累计全程保留浮点精度，仅在最终展示/写入时统一 `Math.round`/`Math.ceil`，消除逐条取整带来的累计误差。
+- [x] **DONE** **28.5 [LEAVE-01] 资源请假日期纳入排期**
+    - [x] 28.5.1 `getResourceCalendar` 读取资源 `unavailableDates`，命中当日产能置 0，避免在请假日排入工作。
+- [x] **DONE** **28.6 [ACCURACY-04] 越界 MD 重算顺序修正**
+    - [x] 28.6.1 将 `endDate` 越界截断（`> scheduleMaxDate`）提前到 `actualWorkingDays/actualMd` 重算之前，修正越界场景人天被高估的问题。
+- [x] **DONE** **28.7 [PERF-05] `sharedMatrix.clear` 移出回滚循环**
+    - [x] 28.7.1 PASS 2 回滚循环内不再每次 `clear()`，改为标记 `didRollback`，循环结束后按需清理一次，消除 O(n²) 重复重建。
+
+### P1 — 健壮性与体验 (Robustness & UX)
+
+- [x] **DONE** **28.8 [AI-01] AI 调用超时与解析健壮性**
+    - [x] 28.8.1 `services/ai.ts` 增加 `AI_TIMEOUT_MS` 与 `AbortController` 超时，区分超时（中文报错）与外部主动中断（重新抛出）。
+    - [x] 28.8.2 `extractJsonArray` 区分「无数组括号（视为空）」与「JSON 解析失败」，收紧 `allocationPercentage <= 100`，并防御 `data.choices[0].message.content` 缺失。
+- [x] **DONE** **28.9 [JIRA-09] 同步进度与可配置 Epic Link 字段**
+    - [x] 28.9.1 `JiraSync.handleSync` 增加逐项目进度展示与每个 Epic 维度的缺失工时错误汇总。
+    - [x] 28.9.2 `services/jira.ts` 支持可配置 `customfield_xxxxx` 的 Epic Link 字段 ID，`Settings.tsx` 新增「Epic Link 自定义字段 ID」配置项（默认 `10014`）。
+- [x] **DONE** **28.10 [DATA-01] 导入覆盖确认与删除级联清理**
+    - [x] 28.10.1 项目/人员文件导入前，若已有数据则弹出 `confirm` 覆盖确认（清空并覆盖不可撤销）。
+    - [x] 28.10.2 `deleteResource`/`deleteProject` 级联删除关联 `allocations`，消除孤儿排期记录。
+
+### P2 — 文档归档 (Docs)
+
+- [x] **DONE** **28.11 [DOC-02] 更新 PRD、Changelog 与 Agent 指南**
+    - [x] 28.11.1 新增 PRD § 3.3.13 章节，归档上述精准度与健壮性加固。
+    - [x] 28.11.2 `CHANGELOG.md` 新增 v1.0.5 条目；`AGENTS.md`/`CLAUDE.md` 补充本地日期、节假日加载、导入覆盖、级联删除等避坑提示。

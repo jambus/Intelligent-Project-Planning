@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
-import { syncEpicLoggedHours } from '../../services/jira';
-import { RefreshCcw, FileWarning, CheckSquare, Square, AlertCircle, Clock } from 'lucide-react';
+import { syncEpicLoggedHours, type UnmatchedAuthor } from '../../services/jira';
+import { RefreshCcw, FileWarning, CheckSquare, Square, AlertCircle, Clock, UserPlus, X } from 'lucide-react';
 import { ErrorModal } from '../components/ErrorModal';
 
 export const JiraSync = () => {
@@ -11,9 +11,12 @@ export const JiraSync = () => {
   const [selectedProjects, setSelectedProjects] = useState<Set<number>>(new Set());
   const [syncProgress, setSyncProgress] = useState<{current: number, total: number} | null>(null);
   const [syncErrorsList, setSyncErrorsList] = useState<Array<{projectName: string, epicKey: string, message: string}>>([]);
+  const [unmatchedAuthors, setUnmatchedAuthors] = useState<UnmatchedAuthor[]>([]);
+  const [authorAssign, setAuthorAssign] = useState<Record<string, number>>({});
 
   
   const projects = useLiveQuery(() => db.projects.toArray());
+  const resources = useLiveQuery(() => db.resources.toArray());
   
   // Only show projects that have a jiraEpicKey
   const epicProjects = projects?.filter(p => p.jiraEpicKey && p.jiraEpicKey.trim() !== '') || [];
@@ -45,14 +48,22 @@ export const JiraSync = () => {
     setIsSyncing(true);
     setSyncError(null);
     setSyncErrorsList([]);
+    setUnmatchedAuthors([]);
+    setAuthorAssign({});
     setSyncProgress({ current: 0, total: targets.length });
 
     const errors: Array<{projectName: string, epicKey: string, message: string}> = [];
+    const unmatchedCollector: Record<string, UnmatchedAuthor> = {};
 
     try {
       const keys = targets.map(p => p.jiraEpicKey);
-      const hoursMap = await syncEpicLoggedHours(keys);
+      const hoursMap = await syncEpicLoggedHours(keys, (resources || []).map(r => ({
+        name: r.name,
+        role: r.role,
+        aliases: (r.jiraAliases || '').split(/[,，\n]/).map(s => s.trim()).filter(Boolean)
+      })), unmatchedCollector);
 
+      let done = 0;
       for (const p of targets) {
         const stats = hoursMap[p.jiraEpicKey];
         if (stats) {
@@ -60,13 +71,30 @@ export const JiraSync = () => {
             totalLoggedMd: stats.totalLoggedMd,
             devLoggedMd: stats.devLoggedMd,
             testLoggedMd: stats.testLoggedMd,
+            jiraEpicStatus: stats.status,
+            jiraStoryCount: stats.storyCount,
+            jiraTaskCount: stats.taskCount,
+            jiraBugCount: stats.bugCount,
             lastJiraSyncAt: Date.now()
           });
+        } else {
+          // Batch returned no data for this Epic (e.g. wrong key or no worklog).
+          errors.push({ projectName: p.name, epicKey: p.jiraEpicKey, message: '未获取到该 Epic 的工时数据（请检查 Epic Key 是否正确或是否有登记工时）' });
         }
+        done += 1;
+        setSyncProgress({ current: done, total: targets.length });
       }
     } catch (err: any) {
       console.error("Jira Sync Error:", err);
-      errors.push({ projectName: '全局', epicKey: '-', message: err.message || '未知错误' });
+      if (err.message === 'JIRA_AUTH_ERROR') {
+        setSyncError({
+          title: '未登录 Jira',
+          message: '检测到您尚未登录 Jira，或登录态已失效。请先登录 Jira 然后再尝试同步。',
+          details: '请在新标签页中打开 Jira 并登录。如果您配置了 API Token，请检查 Token 是否有效。'
+        });
+      } else {
+        errors.push({ projectName: '全局', epicKey: '-', message: err.message || '未知错误' });
+      }
     }
 
     setSyncProgress(null);
@@ -75,6 +103,31 @@ export const JiraSync = () => {
     if (errors.length > 0) {
       setSyncErrorsList(errors);
     }
+
+    // Surface worklog authors that couldn't be mapped to any team member so the
+    // user can configure their Jira identity instead of silently ignoring them.
+    const unmatched = Object.values(unmatchedCollector).sort((a, b) => b.totalSeconds - a.totalSeconds);
+    if (unmatched.length > 0) {
+      setUnmatchedAuthors(unmatched);
+    }
+  };
+
+  // Map an unmatched Jira author to a roster member by appending their identity
+  // (accountId / email / display name) to that member's jiraAliases.
+  const authorKey = (a: UnmatchedAuthor) => (a.accountId || a.email || a.displayName || '').toLowerCase();
+  const assignAuthor = async (author: UnmatchedAuthor) => {
+    const key = authorKey(author);
+    const resourceId = authorAssign[key];
+    if (!resourceId) return;
+    const resource = (resources || []).find(r => r.id === resourceId);
+    if (!resource) return;
+    // Prefer the most reliable identifier: accountId > email > display name.
+    const identifier = author.accountId || author.email || author.displayName;
+    if (!identifier) return;
+    const existing = (resource.jiraAliases || '').split(/[,，\n]/).map(s => s.trim()).filter(Boolean);
+    if (!existing.includes(identifier)) existing.push(identifier);
+    await db.resources.update(resource.id!, { jiraAliases: existing.join(', ') });
+    setUnmatchedAuthors(prev => prev.filter(a => authorKey(a) !== key));
   };
 
   const formatTime = (ts?: number) => {
@@ -124,6 +177,53 @@ export const JiraSync = () => {
         </div>
       )}
 
+      {unmatchedAuthors.length > 0 && (
+        <div className="bg-amber-50 p-5 rounded-xl border border-amber-200">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center space-x-2 text-amber-800 font-bold">
+              <UserPlus size={18} />
+              <span>发现 {unmatchedAuthors.length} 个未匹配的 Jira 用户</span>
+            </div>
+            <button onClick={() => setUnmatchedAuthors([])} className="p-1.5 text-amber-400 hover:bg-amber-100 rounded-full" title="忽略">
+              <X size={16} />
+            </button>
+          </div>
+          <p className="text-xs text-amber-600 mb-4">以下 Jira worklog 作者无法对应到任何团队成员，其工时暂时按 Issue 类型估算。请为他们指定对应成员，系统会把其 Jira 身份（accountId / 邮箱 / 昵称）写入该成员的别名。配置后请重新同步以获得精确的开发/测试工时拆分。</p>
+          <div className="space-y-2">
+            {unmatchedAuthors.map(author => {
+              const key = authorKey(author);
+              const idLabel = author.accountId ? `accountId: ${author.accountId}` : author.email ? `邮箱: ${author.email}` : `昵称: ${author.displayName}`;
+              return (
+                <div key={key} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-amber-100">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-gray-800 text-sm truncate">{author.displayName || author.email || author.accountId || '未知用户'}</div>
+                    <div className="text-[10px] text-gray-400 font-mono truncate">{idLabel} · {(author.totalSeconds / 3600).toFixed(1)}h</div>
+                  </div>
+                  <select
+                    value={authorAssign[key] || ''}
+                    onChange={e => setAuthorAssign(prev => ({ ...prev, [key]: Number(e.target.value) }))}
+                    className="text-sm px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-400 font-medium"
+                  >
+                    <option value="">选择对应成员…</option>
+                    {(resources || []).map(r => (
+                      <option key={r.id} value={r.id}>{r.name}（{r.role}）</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => assignAuthor(author)}
+                    disabled={!authorAssign[key]}
+                    className="flex items-center space-x-1 bg-amber-500 text-white px-3 py-2 rounded-lg font-bold text-sm hover:bg-amber-600 transition-colors disabled:bg-amber-200 disabled:cursor-not-allowed"
+                  >
+                    <UserPlus size={14} />
+                    <span>绑定</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-0 overflow-x-auto">
           {epicProjects.length === 0 ? (
@@ -143,6 +243,8 @@ export const JiraSync = () => {
                   </th>
                   <th className="p-4">项目名称</th>
                   <th className="p-4">Epic Key</th>
+                  <th className="p-4">Epic 状态</th>
+                  <th className="p-4 text-center">Story / Task / Bug</th>
                   <th className="p-4 text-center border-l border-gray-100">已消费 / 评估开发</th>
                   <th className="p-4 text-center border-l border-gray-100">已消费 / 评估测试</th>
                   <th className="p-4 text-center text-blue-600 bg-blue-50/10">已消费总工时</th>
@@ -160,6 +262,18 @@ export const JiraSync = () => {
                     </td>
                     <td className="p-4 font-bold text-gray-900 max-w-[200px] truncate" title={p.name}>{p.name}</td>
                     <td className="p-4"><span className="px-2 py-1 bg-gray-100 text-gray-600 font-mono text-[10px] rounded font-bold">{p.jiraEpicKey}</span></td>
+                    <td className="p-4">
+                      {p.jiraEpicStatus ? <span className="px-2 py-1 bg-indigo-50 text-indigo-600 text-[10px] rounded font-bold">{p.jiraEpicStatus}</span> : <span className="text-gray-300">-</span>}
+                    </td>
+                    <td className="p-4 text-center">
+                      {(p.jiraStoryCount !== undefined || p.jiraTaskCount !== undefined || p.jiraBugCount !== undefined) ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="px-1.5 py-0.5 bg-green-50 text-green-600 text-[10px] rounded font-bold" title="Story">S {p.jiraStoryCount || 0}</span>
+                          <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[10px] rounded font-bold" title="Task">T {p.jiraTaskCount || 0}</span>
+                          <span className="px-1.5 py-0.5 bg-red-50 text-red-600 text-[10px] rounded font-bold" title="Bug">B {p.jiraBugCount || 0}</span>
+                        </div>
+                      ) : <span className="text-gray-300">-</span>}
+                    </td>
                     
                     <td className="p-4 text-center font-mono border-l border-gray-50">
                       <span className="font-bold text-gray-900">{p.devLoggedMd !== undefined ? p.devLoggedMd.toFixed(1) : '-'}</span> / <span className="text-gray-500">{p.devTotalMd}</span>

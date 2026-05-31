@@ -1,6 +1,15 @@
 import * as XLSX from 'xlsx';
 import { db } from '../db';
 
+const priorityWeight: Record<string, number> = {
+  'High': 3, 'Medium': 2, 'Low': 1,
+  '高': 3, '中': 2, '低': 1,
+  'P0': 4, 'P1': 3, 'P2': 2, 'P3': 1,
+  'Must Win': 5, 'Compliance': 4
+};
+
+const getPriorityWeight = (p: string) => priorityWeight[p] || 0;
+
 // Helper to find column index by matching header names (supports English and Chinese)
 const findColumnIndex = (headers: string[], matchNames: string[]): number => {
   const lowercaseHeaders = (headers || []).map(h => (h || '').toString().toLowerCase().trim());
@@ -60,10 +69,25 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
 
       const sheetProjects = rows.slice(1).map(row => {
         if (!row || !Array.isArray(row)) return null;
+        
+        const priorityStr = idxPriority !== -1 ? row[idxPriority]?.toString() || 'Medium' : 'Medium';
+        const devTotalMd = idxDevMd !== -1 ? Number(row[idxDevMd]) || 0 : 0;
+        const testTotalMd = idxTestMd !== -1 ? Number(row[idxTestMd]) || 0 : 0;
+        const isHighPriority = getPriorityWeight(priorityStr) >= 3;
+        // User specified: Dev MD <= 10 means single mode (focused).
+        // High priority and Dev MD > 10 means balanced.
+        // Others (e.g. low priority and Dev MD > 10) also fallback to focused.
+        const isLargeDevProject = devTotalMd > 10; 
+        
+        let defaultStrategy: 'balanced' | 'focused' | 'urgent' = 'focused';
+        if (isHighPriority && isLargeDevProject) {
+          defaultStrategy = 'balanced';
+        }
+        
         return {
           name: idxName !== -1 ? row[idxName]?.toString() || 'Unknown Project' : 'Unknown Project',
           businessOwner: idxBusinessOwner !== -1 ? row[idxBusinessOwner]?.toString() || '' : '',
-          priority: idxPriority !== -1 ? row[idxPriority]?.toString() || 'Medium' : 'Medium',
+          priority: priorityStr,
           status: idxStatus !== -1 ? row[idxStatus]?.toString() || 'To Do' : 'To Do',
           digitalResponsible: idxDigitalResponsible !== -1 ? row[idxDigitalResponsible]?.toString() || '' : '',
           startDate: idxStartDate !== -1 ? row[idxStartDate]?.toString() || '' : '',
@@ -73,12 +97,13 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
           jiraEpicKey: idxJiraKey !== -1 ? row[idxJiraKey]?.toString() || '' : '',
           projectTechLead: idxTechLead !== -1 ? row[idxTechLead]?.toString() || '' : '',
           projectQualityLead: idxQualityLead !== -1 ? row[idxQualityLead]?.toString() || '' : '',
-          devTotalMd: idxDevMd !== -1 ? Number(row[idxDevMd]) || 0 : 0,
-          testTotalMd: idxTestMd !== -1 ? Number(row[idxTestMd]) || 0 : 0,
+          devTotalMd,
+          testTotalMd,
           detailsProductDevMd: idxDetailsDevMd !== -1 ? row[idxDetailsDevMd]?.toString() || '' : '',
           detailsProductTestMd: idxDetailsTestMd !== -1 ? row[idxDetailsTestMd]?.toString() || '' : '',
           techStack: idxTechStack !== -1 ? row[idxTechStack]?.toString() || '' : '',
           domain: idxDomain !== -1 ? row[idxDomain]?.toString() || '' : '',
+          schedulingStrategy: defaultStrategy,
         };
       }).filter((p): p is any => p !== null && (p.name !== 'Unknown Project' || p.businessOwner !== ''));
 
@@ -119,16 +144,19 @@ export const importResourcesFromFile = async (files: File | FileList | File[]): 
       const idxRole = findColumnIndex(headers, ['role', '角色', '专业角色', '职位']);
       const idxCapacity = findColumnIndex(headers, ['capacity', '负荷', '可用负荷', '投入比']);
       const idxSkills = findColumnIndex(headers, ['skills', '技能', '标签', '核心技能']);
+      const idxJiraAliases = findColumnIndex(headers, ['jira aliases', 'jira id', 'jira别名', 'jira账号', 'jira映射']);
 
       const sheetResources = rows.slice(1).map(row => {
         if (!row || !Array.isArray(row)) return null;
         const rawSkills = idxSkills !== -1 ? row[idxSkills]?.toString() || '' : '';
         const rawCapacity = idxCapacity !== -1 ? row[idxCapacity]?.toString() || '100' : '100';
+        const rawAliases = idxJiraAliases !== -1 ? row[idxJiraAliases]?.toString() || '' : '';
         return {
           name: idxName !== -1 ? row[idxName]?.toString() || 'Unknown' : 'Unknown',
           role: idxRole !== -1 ? row[idxRole]?.toString() || '前端工程师' : '前端工程师',
           capacity: Number(rawCapacity.replace('%', '')) || 100,
-          skills: rawSkills.split(/[,,，，]/).map((s: string) => s.trim()).filter(Boolean)
+          skills: rawSkills.split(/[,,，，]/).map((s: string) => s.trim()).filter(Boolean),
+          ...(rawAliases ? { jiraAliases: rawAliases } : {})
         };
       }).filter((r): r is any => r !== null && r.name !== 'Unknown');
 

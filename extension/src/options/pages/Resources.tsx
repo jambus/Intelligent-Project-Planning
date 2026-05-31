@@ -22,11 +22,13 @@ export const Resources = () => {
     role: string;
     capacity: number;
     skills: string[];
+    jiraAliases: string;
   }>({ 
     name: '', 
     role: '前端工程师', 
     capacity: 100, 
-    skills: [] 
+    skills: [],
+    jiraAliases: ''
   });
 
   const roles = [
@@ -38,7 +40,7 @@ export const Resources = () => {
 
   const handleOpenAdd = () => {
     setEditingId(null);
-    setFormData({ name: '', role: '前端工程师', capacity: 100, skills: [] });
+    setFormData({ name: '', role: '前端工程师', capacity: 100, skills: [], jiraAliases: '' });
     setShowModal(true);
   };
 
@@ -48,7 +50,8 @@ export const Resources = () => {
       name: r.name, 
       role: r.role, 
       capacity: r.capacity, 
-      skills: r.skills || [] 
+      skills: r.skills || [],
+      jiraAliases: r.jiraAliases || ''
     });
     setShowModal(true);
   };
@@ -70,7 +73,8 @@ export const Resources = () => {
       name: formData.name,
       role: formData.role,
       capacity: Number(formData.capacity),
-      skills: formData.skills
+      skills: formData.skills,
+      jiraAliases: formData.jiraAliases.trim()
     };
 
     if (editingId) {
@@ -91,6 +95,14 @@ export const Resources = () => {
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Import REPLACES all existing resources (clear + bulkAdd). Warn first.
+    if ((resources?.length || 0) > 0) {
+      if (!window.confirm(`导入将清空并覆盖现有的 ${resources!.length} 名资源（不可撤销）。是否继续？`)) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    }
 
     setIsImporting(true);
     setError(null);
@@ -118,14 +130,15 @@ export const Resources = () => {
   const exportToCSV = () => {
     if (!resources || resources.length === 0) return;
     
-    const headers = ['Name', 'Role', 'Capacity %', 'Skills'];
+    const headers = ['Name', 'Role', 'Capacity %', 'Skills', 'Jira Aliases'];
     const csvContent = [
       headers.join(','),
       ...resources.map(r => [
         `"${r.name}"`,
         `"${r.role}"`,
         r.capacity,
-        `"${r.skills.join(', ')}"`
+        `"${r.skills.join(', ')}"`,
+        `"${(r.jiraAliases || '').replace(/"/g, '""')}"`
       ].join(','))
     ].join('\n');
 
@@ -283,8 +296,8 @@ export const Resources = () => {
 
       {/* Unified Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl w-[480px] transform animate-in zoom-in-95 duration-200 border border-gray-100">
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-start justify-center z-50 animate-in fade-in duration-200 overflow-y-auto py-10">
+          <div className="bg-white p-8 rounded-3xl shadow-2xl w-[480px] max-h-[85vh] overflow-y-auto custom-scrollbar transform animate-in zoom-in-95 duration-200 border border-gray-100">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-xl font-black text-gray-900">
                 {editingId ? '修正成员信息' : '新增团队成员'}
@@ -304,6 +317,17 @@ export const Resources = () => {
                   onChange={e => setFormData({...formData, name: e.target.value})} 
                   className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium" 
                 />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Jira 账号映射（选填）</label>
+                <input 
+                  placeholder="姓名与 Jira 不一致时填写：邮箱 / accountId / 显示名，多个用逗号分隔"
+                  value={formData.jiraAliases} 
+                  onChange={e => setFormData({...formData, jiraAliases: e.target.value})} 
+                  className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-sm" 
+                />
+                <p className="text-[10px] text-gray-400 mt-1.5 leading-relaxed">用于把 Jira worklog 作者准确对应到该成员，从而正确统计开发/测试工时。优先级：邮箱/accountId（精确） &gt; 显示名（模糊）。</p>
               </div>
 
               <div>
