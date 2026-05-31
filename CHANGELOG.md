@@ -2,6 +2,8 @@
 
 ## [1.0.6] - 2026-06-01
 
+## [1.0.5] - 2026-05-31
+
 ### 新特性 (New Features)
 - **Jira 工时归属精准化 — 基于 Worklog 作者角色 (Role-Based Worklog Attribution)**：
   - **作者级工时拆分**：不再仅依赖 Issue Type 推断开发/测试工时。系统现在逐条解析 worklog 作者身份，与「人员管理」中的团队花名册进行匹配：测试工程师的 worklog 归入 `testLoggedMd`，开发角色归入 `devLoggedMd`，真正精确到"谁记的工时，就按谁的角色归类"。
@@ -15,8 +17,6 @@
 ### 修复与体验 (Fixes & UX)
 - **人员编辑弹窗溢出修复 (Resource Modal Overflow Fix)**：
   - 修复了当团队成员技能标签较多时，编辑弹窗高度超出屏幕导致关闭按钮和确认/取消按钮不可见、无法滚动的问题。弹窗现在限制最大高度为 `85vh` 并支持内部滚动，外层遮罩也改为可整体滚动。
-
-## [1.0.5] - 2026-05-31
 
 ### 核心引擎与精准度 (Core Engine & Precision)
 - **时区错位修复 (Timezone-Safe Dates)**：
@@ -61,6 +61,8 @@
   - **精准认证拦截**：修复了未登录 Jira 时 API 请求被静默吞掉导致同步工时始终为 0 的问题。系统现在能够精准检测 `401 Unauthorized` 和 `403 Forbidden` 等认证阻断，以及 Jira Web 端的 HTML 登录重定向页面，并在界面上通过 ErrorModal 强制弹窗提醒用户先进行登录。
 - **开源协议变更 (License Change)**：
   - 软件开源协议由 MIT License 更改为 **Apache 2.0 License**。
+
+
 ## [1.0.4] - 2026-05-25
 
 ### 新特性 (New Features)
