@@ -46,6 +46,8 @@ export interface Project {
   techStack?: string; // Technical Stack required
   domain?: string; // Product Domain
   schedulingStrategy?: 'balanced' | 'focused' | 'urgent'; // Strategy for AI allocation
+  scrumTeamId?: number; // Primary Scrum Team for the project
+  teamSchedulingMode?: 'team-first' | 'cross-team' | 'all-in'; // Constraint mode
 }
 
 export interface Allocation {
@@ -166,6 +168,17 @@ export class PlannerDatabase extends Dexie {
     this.version(8).stores({
       resources: '++id, name, role, scrumTeamId',
       projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName',
+      scrumTeams: '++id, name'
+    });
+
+    this.version(9).stores({
+      resources: '++id, name, role, scrumTeamId',
+      projects: '++id, name, status, priority, digitalResponsible, scrumTeamId',
       allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
       jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
       settings: 'key',

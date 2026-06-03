@@ -288,6 +288,19 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         return formatLocalDate(d);
       };
 
+      const computeAllowedResourceIds = (p: any, isLatePass: boolean) => {
+        let allowed = resources.map(r => Number(r.id));
+        const teamMode = p.teamSchedulingMode || 'all-in';
+        if (teamMode === 'team-first') {
+          if (p.scrumTeamId) allowed = resources.filter(r => Number(r.scrumTeamId) === Number(p.scrumTeamId)).map(r => Number(r.id));
+        } else if (teamMode === 'cross-team') {
+          if (p.scrumTeamId && !isLatePass) {
+            allowed = resources.filter(r => Number(r.scrumTeamId) === Number(p.scrumTeamId)).map(r => Number(r.id));
+          }
+        }
+        return allowed;
+      };
+
       const applySuggestions = async (suggestions: AIMicroAllocation[], phase: 'dev' | 'test', pool: any[]) => {
         let count = 0;
         console.group(`[Hard Logic] Applying ${suggestions.length} AI suggestions for ${phase.toUpperCase()}`);
@@ -311,6 +324,14 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           const pGap = cGaps.find(g => Number(g.id) === Number(project.id));
           const rIdle = cIdle.find(r => Number(r.id) === Number(resource.id));
           if (!pGap || !rIdle) continue;
+
+          // Enforce Scrum Team Constraint in JS hard logic
+          const isLatePass = currentStep === 3;
+          const allowedIds = computeAllowedResourceIds(project, isLatePass);
+          if (!allowedIds.includes(Number(resource.id))) {
+            console.warn(`[Hard Logic] Blocked AI suggestion violating Scrum Team constraints: Project ${project.id} -> Resource ${resource.id}`);
+            continue;
+          }
 
           const targetGap = phase === 'dev' ? pGap.devGap : pGap.testGap;
           const exactFinalMd = Math.min(sug.allocatedMd, targetGap, rIdle.idleMd);
@@ -490,7 +511,14 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         const batch = readyProjects.slice(i, i + BATCH_SIZE);
         setScheduleStatus(`🛠️ 阶段一：像素匹配 [${i+1}~${Math.min(i+BATCH_SIZE, readyProjects.length)}]...`);
         const { gaps: dGaps, idle: dIdle } = runAudit(readyProjects, resources, currentAllocations);
-        const bDev = batch.map(p => ({ ...p, gap: Math.ceil(dGaps.find(g => g.id === p.id)?.devGap || 0), projectTechLead: p.projectTechLead, detailsProductDevMd: p.detailsProductDevMd, schedulingStrategy: p.schedulingStrategy })).filter(p => p.gap >= 1);
+        const bDev = batch.map(p => ({ 
+          ...p, 
+          gap: Math.ceil(dGaps.find(g => g.id === p.id)?.devGap || 0), 
+          projectTechLead: p.projectTechLead, 
+          detailsProductDevMd: p.detailsProductDevMd, 
+          schedulingStrategy: p.schedulingStrategy,
+          allowedResourceIds: computeAllowedResourceIds(p, false)
+        })).filter(p => p.gap >= 1);
         if (bDev.length && dIdle.some(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role))) {
           const sug = await suggestAllocationsForBatch(bDev as any, dIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)), 'dev', false, signal);
           checkStop();
@@ -498,7 +526,14 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         }
         checkStop();
         const { gaps: tGaps, idle: tIdle } = runAudit(readyProjects, resources, currentAllocations);
-        const bTest = batch.map(p => ({ ...p, gap: Math.ceil(tGaps.find(g => g.id === p.id)?.testGap || 0), projectQualityLead: p.projectQualityLead, detailsProductTestMd: p.detailsProductTestMd, schedulingStrategy: p.schedulingStrategy })).filter(p => p.gap >= 1);
+        const bTest = batch.map(p => ({ 
+          ...p, 
+          gap: Math.ceil(tGaps.find(g => g.id === p.id)?.testGap || 0), 
+          projectQualityLead: p.projectQualityLead, 
+          detailsProductTestMd: p.detailsProductTestMd, 
+          schedulingStrategy: p.schedulingStrategy,
+          allowedResourceIds: computeAllowedResourceIds(p, false)
+        })).filter(p => p.gap >= 1);
         if (bTest.length && tIdle.some(r => r.role === '测试工程师')) {
           const sug = await suggestAllocationsForBatch(bTest as any, tIdle.filter(r => r.role === '测试工程师'), 'test', false, signal);
           checkStop();
@@ -547,7 +582,14 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         const pool = [...retryQueue, ...readyProjects.filter(p => !retryQueue.includes(p))];
         const devG = hGaps.map(g => {
           const p = readyProjects.find(rp => rp.id === g.id);
-          return { ...g, gap: Math.ceil(g.devGap), projectTechLead: p?.projectTechLead, detailsProductDevMd: p?.detailsProductDevMd, schedulingStrategy: p?.schedulingStrategy };
+          return { 
+            ...g, 
+            gap: Math.ceil(g.devGap), 
+            projectTechLead: p?.projectTechLead, 
+            detailsProductDevMd: p?.detailsProductDevMd, 
+            schedulingStrategy: p?.schedulingStrategy,
+            allowedResourceIds: p ? computeAllowedResourceIds(p, true) : resources.map(r => r.id!)
+          };
         }).filter(g => g.gap >= 1);
         const devI = hIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role));
         if (devG.length && devI.length) {
@@ -559,7 +601,14 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         const { gaps: hGaps2, idle: hIdle2 } = runAudit(readyProjects, resources, currentAllocations);
         const testG = hGaps2.map(g => {
           const p = readyProjects.find(rp => rp.id === g.id);
-          return { ...g, gap: Math.ceil(g.testGap), projectQualityLead: p?.projectQualityLead, detailsProductTestMd: p?.detailsProductTestMd, schedulingStrategy: p?.schedulingStrategy };
+          return { 
+            ...g, 
+            gap: Math.ceil(g.testGap), 
+            projectQualityLead: p?.projectQualityLead, 
+            detailsProductTestMd: p?.detailsProductTestMd, 
+            schedulingStrategy: p?.schedulingStrategy,
+            allowedResourceIds: p ? computeAllowedResourceIds(p, true) : resources.map(r => r.id!)
+          };
         }).filter(g => g.gap >= 1);
         const testI = hIdle2.filter(r => r.role === '测试工程师');
         if (testG.length && testI.length) {

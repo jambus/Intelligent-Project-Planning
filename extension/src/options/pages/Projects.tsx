@@ -25,8 +25,8 @@ const getPriorityWeight = (p: string) => {
 };
 
 export const Projects = () => {
-  // Use projects directly as they are stored in the order of insertion (ID)
   const projects = useLiveQuery(() => db.projects.toArray());
+  const scrumTeams = useLiveQuery(() => db.scrumTeams.toArray());
   const [isImporting, setIsImporting] = useState(false);
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +128,8 @@ export const Projects = () => {
           <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-xs uppercase tracking-wider">
-                <th className="p-4 font-semibold">排期模式</th>
+                <th className="p-4 font-semibold">AI 策略</th>
+                <th className="p-4 font-semibold">Scrum 约束</th>
                 <th className="p-4 font-semibold w-16">顺序</th>
                 <th className="p-4 font-semibold min-w-[200px]">项目名称 / Epic</th>
                 <th className="p-4 font-semibold">优先级</th>
@@ -143,7 +144,7 @@ export const Projects = () => {
             <tbody>
               {(!displayProjects || displayProjects.length === 0) ? (
                 <tr>
-                  <td colSpan={10} className="p-12 text-center">
+                  <td colSpan={11} className="p-12 text-center">
                     <div className="flex flex-col items-center justify-center text-gray-400 space-y-2">
                       <Info size={40} className="opacity-20" />
                       <p>暂无项目数据，请点击上方按钮导入 CSV/Excel 文件。</p>
@@ -165,6 +166,38 @@ export const Projects = () => {
                       <option value="balanced">均衡模式</option>
                       <option value="urgent">紧急模式</option>
                     </select>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex flex-col space-y-1">
+                      <select
+                        value={p.scrumTeamId || ''}
+                        onChange={(e) => {
+                          const val = e.target.value ? Number(e.target.value) : undefined;
+                          db.projects.update(p.id!, { 
+                            scrumTeamId: val,
+                            teamSchedulingMode: val ? (p.teamSchedulingMode || 'cross-team') : 'all-in'
+                          });
+                        }}
+                        className="appearance-none py-1 px-2 text-xs font-bold text-gray-600 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-white w-28 hover:border-gray-300"
+                      >
+                        <option value="">(无团队)</option>
+                        {scrumTeams?.map(st => (
+                          <option key={st.id} value={st.id}>{st.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={p.teamSchedulingMode || 'all-in'}
+                        onChange={(e) => {
+                          db.projects.update(p.id!, { teamSchedulingMode: e.target.value as any });
+                        }}
+                        className="appearance-none py-1 px-2 text-[10px] text-gray-500 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-gray-50 w-28 hover:border-gray-300"
+                        disabled={!p.scrumTeamId}
+                      >
+                        <option value="team-first">本队专属 (team-first)</option>
+                        <option value="cross-team">跨队借人 (cross-team)</option>
+                        <option value="all-in">全局统筹 (all-in)</option>
+                      </select>
+                    </div>
                   </td>
                   <td className="p-4 text-xs font-mono text-gray-400">#{index + 1}</td>
                   <td className="p-4">
