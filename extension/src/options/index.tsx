@@ -23,7 +23,10 @@ if (container) {
         <HashRouter>
           <Routes>
             <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
+              <Route index element={<Dashboard view="all" />} />
+              <Route path="scheduled" element={<Dashboard view="scheduled" />} />
+              <Route path="allocations" element={<Dashboard view="allocations" />} />
+              <Route path="gaps" element={<Dashboard view="gaps" />} />
               <Route path="projects" element={<Projects />} />
               <Route path="jira-sync" element={<JiraSync />} />
               <Route path="resources" element={<Resources />} />

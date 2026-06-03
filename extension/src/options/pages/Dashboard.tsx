@@ -6,7 +6,7 @@ import { Users, ChevronDown, ChevronUp, ArrowRight, ClipboardList, AlertTriangle
 import { getWorkingDays, getWeeksInRange, calculateWeeklyMD } from '../../utils/dateUtils';
 import { computeProjectGaps } from '../../utils/audit';
 
-export const Dashboard = () => {
+export const Dashboard = ({ view = 'all' }: { view?: 'all' | 'scheduled' | 'allocations' | 'gaps' }) => {
   const projects = useLiveQuery(() => db.projects.toArray());
   const resources = useLiveQuery(() => db.resources.toArray());
   const allocations = useLiveQuery(() => db.allocations.toArray());
@@ -266,6 +266,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Scheduled Projects Box */}
+      {(view === 'all' || view === 'scheduled') && (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div 
           className="p-4 border-b border-gray-100 bg-blue-50/20 flex justify-between items-center cursor-pointer hover:bg-blue-50/40 transition-colors"
@@ -325,8 +326,10 @@ export const Dashboard = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Main Table */}
+      {(view === 'all' || view === 'allocations') && (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div 
           className="p-4 border-b border-gray-100 bg-gray-50/30 flex justify-between items-center cursor-pointer hover:bg-gray-50/50 transition-colors"
@@ -454,7 +457,10 @@ export const Dashboard = () => {
           </div>
         )}
       </div>
+      )}
 
+      {(view === 'all' || view === 'gaps') && (
+      <>
       <div className="grid grid-cols-2 gap-6 mt-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div 
@@ -545,6 +551,8 @@ export const Dashboard = () => {
         )}</div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };

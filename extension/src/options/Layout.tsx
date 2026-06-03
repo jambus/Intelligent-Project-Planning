@@ -5,7 +5,16 @@ export const Layout = () => {
   const location = useLocation();
 
   const navItems = [
-    { name: '仪表盘', path: '/', icon: <LayoutDashboard size={20} /> },
+    { 
+      name: '资源大盘', 
+      icon: <LayoutDashboard size={20} />,
+      subItems: [
+        { name: '全局概览', path: '/' },
+        { name: '已排项目', path: '/scheduled' },
+        { name: '已排期任务详情', path: '/allocations' },
+        { name: '待跟进事项', path: '/gaps' },
+      ]
+    },
     { name: '项目管理', path: '/projects', icon: <FolderKanban size={20} /> },
     { name: 'Jira 管理', path: '/jira-sync', icon: <RefreshCw size={20} /> },
     { name: '人员管理', path: '/resources', icon: <Users size={20} /> },
@@ -31,13 +40,42 @@ export const Layout = () => {
           </div>
           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider ml-11">IRP Assistant</p>
         </div>
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
           {navItems.map((item) => {
+            if (item.subItems) {
+              return (
+                <div key={item.name} className="space-y-1 mb-2">
+                  <div className="flex items-center space-x-3 px-4 py-2.5 rounded-lg font-bold text-gray-800">
+                    {item.icon}
+                    <span>{item.name}</span>
+                  </div>
+                  <div className="ml-7 border-l-2 border-gray-100 pl-2 space-y-1">
+                    {item.subItems.map(sub => {
+                      const isActive = location.pathname === sub.path;
+                      return (
+                        <Link
+                          key={sub.path}
+                          to={sub.path}
+                          className={`flex items-center px-4 py-2 rounded-lg transition-colors text-sm ${
+                            isActive 
+                              ? 'bg-blue-50 text-blue-700 font-bold' 
+                              : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium'
+                          }`}
+                        >
+                          {sub.name}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+            
             const isActive = location.pathname === item.path;
             return (
               <Link
-                key={item.path}
-                to={item.path}
+                key={item.path || item.name}
+                to={item.path!}
                 className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive 
                     ? 'bg-blue-50 text-blue-700 font-medium' 
