@@ -8,6 +8,13 @@ export interface Resource {
   skills: string[]; // JSON array of skill tags
   unavailableDates?: string[]; // Array of ISO dates when resource is on leave
   jiraAliases?: string; // Optional Jira identities (accountId/email/display name), comma or newline separated, to reconcile name mismatches
+  scrumTeamId?: number; // Reference to a ScrumTeam
+}
+
+export interface ScrumTeam {
+  id?: number;
+  name: string;
+  description?: string;
 }
 
 export interface Project {
@@ -86,6 +93,7 @@ export class PlannerDatabase extends Dexie {
   settings!: Table<Setting, string>;
   skills!: Table<Skill, number>;
   productOperations!: Table<ProductOperation, number>;
+  scrumTeams!: Table<ScrumTeam, number>;
 
   constructor() {
     super('IntelligentResourcePlannerDB');
@@ -153,6 +161,17 @@ export class PlannerDatabase extends Dexie {
       settings: 'key',
       skills: '++id, name, type',
       productOperations: '++id, productName'
+    });
+
+    this.version(8).stores({
+      resources: '++id, name, role, scrumTeamId',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName',
+      scrumTeams: '++id, name'
     });
   }
 }
