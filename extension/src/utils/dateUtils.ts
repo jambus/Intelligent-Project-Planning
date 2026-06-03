@@ -113,6 +113,23 @@ export const getWorkingDays = (start: Date, end: Date, workingDaySet?: Set<strin
 };
 
 /**
+ * Utility to load config and build a working day set for a range.
+ * This ensures the holidays config is loaded and applied before the calculation.
+ */
+export const buildWorkingDaySet = async (startDate: Date, endDate: Date): Promise<Set<string>> => {
+  await loadHolidaysConfig();
+  const set = new Set<string>();
+  const current = new Date(startDate);
+  while (current <= endDate) {
+    if (isWorkingDay(current)) {
+      set.add(formatLocalDate(current));
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  return set;
+};
+
+/**
  * Calculate allocated man-days for a specific month
  */
 export const calculateMonthlyMD = (

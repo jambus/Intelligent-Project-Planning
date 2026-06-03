@@ -182,6 +182,7 @@ export const importResourcesFromFile = async (files: File | FileList | File[]): 
       const idxSkills = findColumnIndex(headers, ['skills', '技能', '标签', '核心技能']);
       const idxJiraAliases = findColumnIndex(headers, ['jira aliases', 'jira id', 'jira别名', 'jira账号', 'jira映射']);
       const idxScrum = findColumnIndex(headers, ['scrum', 'scrum team', '所属 scrum', '团队', 'scrum 组']);
+      const idxUnavailable = findColumnIndex(headers, ['unavailable dates', 'unavailable', '请假', '休假', '不可用日期']);
 
       const existingScrums = await db.scrumTeams.toArray();
       const scrumMap = new Map<string, number>();
@@ -209,13 +210,16 @@ export const importResourcesFromFile = async (files: File | FileList | File[]): 
         const rawAliases = idxJiraAliases !== -1 ? row[idxJiraAliases]?.toString() || '' : '';
         const rawScrumName = idxScrum !== -1 ? row[idxScrum]?.toString().trim() || '' : '';
         const scrumTeamId = rawScrumName ? scrumMap.get(rawScrumName.toLowerCase()) : undefined;
+        const rawUnavailable = idxUnavailable !== -1 ? row[idxUnavailable]?.toString().trim() || '' : '';
+        const unavailableDates = rawUnavailable ? rawUnavailable.split(/[,,，，\n]/).map((d: string) => d.trim()).filter(Boolean) : undefined;
         return {
           name: idxName !== -1 ? row[idxName]?.toString() || 'Unknown' : 'Unknown',
           role: idxRole !== -1 ? row[idxRole]?.toString() || '前端工程师' : '前端工程师',
           capacity: Number(rawCapacity.replace('%', '')) || 100,
           skills: rawSkills.split(/[,,，，]/).map((s: string) => s.trim()).filter(Boolean),
           ...(rawAliases ? { jiraAliases: rawAliases } : {}),
-          ...(scrumTeamId ? { scrumTeamId } : {})
+          ...(scrumTeamId ? { scrumTeamId } : {}),
+          ...(unavailableDates && unavailableDates.length > 0 ? { unavailableDates } : {})
         };
       }).filter((r): r is any => r !== null && r.name !== 'Unknown');
 

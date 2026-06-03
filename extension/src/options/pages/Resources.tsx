@@ -131,7 +131,7 @@ export const Resources = () => {
   const exportToCSV = () => {
     if (!resources || resources.length === 0) return;
     
-    const headers = ['Name', 'Role', 'Capacity %', 'Skills', 'Jira Aliases', 'Scrum Team'];
+    const headers = ['Name', 'Role', 'Capacity %', 'Skills', 'Jira Aliases', 'Scrum Team', 'Unavailable Dates'];
     const csvContent = [
       headers.join(','),
       ...resources.map(r => {
@@ -142,7 +142,8 @@ export const Resources = () => {
           r.capacity,
           `"${r.skills.join(', ')}"`,
           `"${(r.jiraAliases || '').replace(/"/g, '""')}"`,
-          `"${team ? team.name : ''}"`
+          `"${team ? team.name : ''}"`,
+          `"${(r.unavailableDates || []).join(', ')}"`
         ].join(',');
       })
     ].join('\n');
