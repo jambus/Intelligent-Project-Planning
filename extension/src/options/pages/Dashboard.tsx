@@ -28,12 +28,10 @@ export const Dashboard = ({ view = 'all' }: { view?: 'all' | 'scheduled' | 'allo
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
-  const currentQuarterStart = Math.floor((currentMonth - 1) / 3) * 3 + 1;
-  const currentQuarterEnd = currentQuarterStart + 2;
 
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [startMonth, setStartMonth] = useState(currentQuarterStart);
-  const [endMonth, setEndMonth] = useState(currentQuarterEnd);
+  const [startMonth, setStartMonth] = useState(currentMonth);
+  const [endMonth, setEndMonth] = useState(Math.min(12, currentMonth + 2));
 
   const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
