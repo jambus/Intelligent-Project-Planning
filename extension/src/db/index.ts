@@ -8,6 +8,13 @@ export interface Resource {
   skills: string[]; // JSON array of skill tags
   unavailableDates?: string[]; // Array of ISO dates when resource is on leave
   jiraAliases?: string; // Optional Jira identities (accountId/email/display name), comma or newline separated, to reconcile name mismatches
+  scrumTeamId?: number; // Reference to a ScrumTeam
+}
+
+export interface ScrumTeam {
+  id?: number;
+  name: string;
+  description?: string;
 }
 
 export interface Project {
@@ -39,6 +46,9 @@ export interface Project {
   techStack?: string; // Technical Stack required
   domain?: string; // Product Domain
   schedulingStrategy?: 'balanced' | 'focused' | 'urgent'; // Strategy for AI allocation
+  scrumTeamId?: number; // Primary Scrum Team for the project
+  teamSchedulingMode?: 'team-first' | 'cross-team' | 'all-in'; // Constraint mode
+  rejectionReason?: string; // Reason why the project could not be fully scheduled
 }
 
 export interface Allocation {
@@ -86,6 +96,7 @@ export class PlannerDatabase extends Dexie {
   settings!: Table<Setting, string>;
   skills!: Table<Skill, number>;
   productOperations!: Table<ProductOperation, number>;
+  scrumTeams!: Table<ScrumTeam, number>;
 
   constructor() {
     super('IntelligentResourcePlannerDB');
@@ -153,6 +164,28 @@ export class PlannerDatabase extends Dexie {
       settings: 'key',
       skills: '++id, name, type',
       productOperations: '++id, productName'
+    });
+
+    this.version(8).stores({
+      resources: '++id, name, role, scrumTeamId',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName',
+      scrumTeams: '++id, name'
+    });
+
+    this.version(9).stores({
+      resources: '++id, name, role, scrumTeamId',
+      projects: '++id, name, status, priority, digitalResponsible, scrumTeamId',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName',
+      scrumTeams: '++id, name'
     });
   }
 }

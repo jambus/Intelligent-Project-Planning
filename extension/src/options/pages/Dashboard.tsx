@@ -1,22 +1,116 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { useScheduling } from '../../context/SchedulingContext';
 import { Users, ChevronDown, ChevronUp, ArrowRight, ClipboardList, AlertTriangle, FileWarning, Search, TriangleAlert, User, Briefcase, RefreshCcw, CheckCircle2, Zap, X, Play } from 'lucide-react';
-import { getWorkingDays, getWeeksInRange, calculateWeeklyMD } from '../../utils/dateUtils';
+import { getWeeksInRange, calculateWeeklyMD } from '../../utils/dateUtils';
 import { computeProjectGaps } from '../../utils/audit';
 
-export const Dashboard = () => {
+const ProjectScheduleSection = ({ 
+  title, count, projects, isExpanded, setIsExpanded, 
+  icon: Icon, bgColor, textColor, hoverColor,
+  showGaps, showReason, emptyMessage 
+}: any) => {
+  return (
+    <div className={`bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-6`}>
+      <div 
+        className={`p-4 border-b border-gray-100 ${bgColor} flex justify-between items-center cursor-pointer ${hoverColor} transition-colors`}
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <h3 className={`font-bold ${textColor} text-sm flex items-center space-x-2`}>
+          <Icon size={16} />
+          <span>{title} (共 {count} 个)</span>
+        </h3>
+        <button className="text-gray-400 hover:text-gray-600 transition-colors">
+          {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        </button>
+      </div>
+      {isExpanded && (
+        <div className="p-0 overflow-x-auto animate-in slide-in-from-top-2 duration-200">
+          {projects.length === 0 ? (
+            <p className="text-gray-400 text-center py-8 text-xs italic">{emptyMessage}</p>
+          ) : (
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-gray-200 text-gray-400 font-black uppercase tracking-widest bg-gray-50/10">
+                  <th className="p-4">项目名称</th>
+                  {showGaps ? (
+                    <>
+                      <th className="p-4 text-center">开发缺口</th>
+                      <th className="p-4 text-center">测试缺口</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="p-4">开发负责人</th>
+                      <th className="p-4">测试负责人</th>
+                    </>
+                  )}
+                  {showReason ? (
+                    <th className="p-4 text-center">推测原因</th>
+                  ) : (
+                    <th className="p-4">所有参与人员</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {projects.map((p: any) => (
+                  <tr key={p.id} className={`border-b border-gray-100 hover:bg-gray-50/50 transition-colors`}>
+                    <td className="p-4 font-black text-gray-900">{p.name}</td>
+                    {showGaps ? (
+                      <>
+                        <td className="p-4 text-center">{p.devGap > 0 ? <span className="font-mono font-bold text-orange-600">{Math.round(p.devGap)}d</span> : <span className="text-gray-200">-</span>}</td>
+                        <td className="p-4 text-center">{p.testGap > 0 ? <span className="font-mono font-bold text-teal-600">{Math.round(p.testGap)}d</span> : <span className="text-gray-200">-</span>}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="p-4 text-gray-600 font-medium">{p.projectTechLead || '-'}</td>
+                        <td className="p-4 text-gray-600 font-medium">{p.projectQualityLead || '-'}</td>
+                      </>
+                    )}
+                    {showReason ? (
+                      <td className="p-4 text-center">
+                        <span className={`px-2 py-0.5 bg-red-50 text-red-600 border border-red-100 rounded-md text-[10px] font-bold`}>
+                          {p.unscheduledReason}
+                        </span>
+                      </td>
+                    ) : (
+                      <td className="p-4">
+                        <div className="flex flex-wrap gap-1 items-center">
+                          {p.allPersonnel && p.allPersonnel.split(', ').map((name: string) => (
+                            <span key={name} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold">
+                              {name}
+                            </span>
+                          ))}
+                          {p.devViaJira && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold">开发·Jira工时已消耗</span>}
+                          {p.testViaJira && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold">测试·Jira工时已消耗</span>}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const Dashboard = ({ view = 'all' }: { view?: 'all' | 'scheduled' | 'allocations' | 'gaps' }) => {
   const projects = useLiveQuery(() => db.projects.toArray());
   const resources = useLiveQuery(() => db.resources.toArray());
   const allocations = useLiveQuery(() => db.allocations.toArray());
   const operations = useLiveQuery(() => db.productOperations.toArray());
+  const scrumTeams = useLiveQuery(() => db.scrumTeams.toArray());
   
   const { isScheduling, scheduleStatus, currentStep, error, handleGenerateSchedule, stopScheduling, clearError } = useScheduling();
   const [groupMode, setGroupMode] = useState<'resource' | 'project'>('resource');
 
   // Collapse states
   const [isScheduledExpanded, setIsScheduledExpanded] = useState(true);
+  const [isPartiallyScheduledExpanded, setIsPartiallyScheduledExpanded] = useState(true);
+  const [isUnscheduledExpanded, setIsUnscheduledExpanded] = useState(true);
   const [isMainTableExpanded, setIsMainTableExpanded] = useState(true);
   const [isGapsExpanded, setIsGapsExpanded] = useState(true);
   const [isIdleExpanded, setIsIdleExpanded] = useState(true);
@@ -25,12 +119,10 @@ export const Dashboard = () => {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
-  const currentQuarterStart = Math.floor((currentMonth - 1) / 3) * 3 + 1;
-  const currentQuarterEnd = currentQuarterStart + 2;
 
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [startMonth, setStartMonth] = useState(currentQuarterStart);
-  const [endMonth, setEndMonth] = useState(currentQuarterEnd);
+  const [startMonth, setStartMonth] = useState(currentMonth);
+  const [endMonth, setEndMonth] = useState(Math.min(12, currentMonth + 2));
 
   const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -55,13 +147,12 @@ export const Dashboard = () => {
   // UI-only audit logic for display. Project gaps use the shared auditor so the
   // dashboard never drifts from the scheduling engine; idle is computed against
   // the currently displayed week range for the grid.
-  const runAuditForUI = (currentProjects: any[], currentResources: any[], currentAllocations: any[]) => {
+  const runAuditForUI = (currentProjects: any[], currentResources: any[], currentAllocations: any[], currentScrumTeams: any[], currentWorkingDaySet: Set<string>) => {
     const gaps = computeProjectGaps(currentProjects, currentResources, currentAllocations)
       .filter(p => Math.ceil(p.devGap) >= 1 || Math.ceil(p.testGap) >= 1);
 
     const idle = currentResources.map(r => {
       const rAllocations = currentAllocations.filter(a => Number(a.resourceId) === Number(r.id));
-      // Accumulate at full precision; round once at the end (#8).
       let totalAllocatedMdInRange = 0;
       displayWeeks.forEach(w => {
         rAllocations.forEach(a => {
@@ -69,44 +160,92 @@ export const Dashboard = () => {
         });
       });
 
-      const rangeStart = new Date(selectedYear, startMonth - 1, 1);
-      const rangeEnd = new Date(selectedYear, endMonth, 0);
-      const totalWorkingDaysInRange = getWorkingDays(rangeStart, rangeEnd);
-      const capacityMd = (totalWorkingDaysInRange * r.capacity) / 100;
+      const leaveDays = new Set(Array.isArray(r.unavailableDates) ? r.unavailableDates : []);
+      let activeWorkingDays = 0;
+      currentWorkingDaySet.forEach(d => {
+        if (!leaveDays.has(d)) activeWorkingDays++;
+      });
+      const capacityMd = (activeWorkingDays * r.capacity) / 100;
       const utilization = capacityMd > 0 ? (totalAllocatedMdInRange / capacityMd) * 100 : 0;
-      return { ...r, idleMd: Math.max(0, Math.round(capacityMd - totalAllocatedMdInRange)), utilization };
-    }).filter(r => r.idleMd >= 1);
+      return { ...r, idleMd: Math.max(0, capacityMd - totalAllocatedMdInRange), allocatedMd: totalAllocatedMdInRange, capacityMd, utilization };
+    });
 
-    return { gaps, idle };
+    const activeIdle = idle.filter(r => Math.round(r.idleMd) >= 1);
+
+    const teamCapacities = (currentScrumTeams || []).map(team => {
+      const teamResources = idle.filter(r => r.scrumTeamId === team.id);
+      let totalCapacityMd = 0; let allocatedMd = 0; let idleMd = 0; let devIdleMd = 0; let testIdleMd = 0;
+
+      teamResources.forEach(r => {
+        totalCapacityMd += r.capacityMd;
+        allocatedMd += r.allocatedMd;
+        idleMd += r.idleMd;
+        if (['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)) devIdleMd += r.idleMd;
+        else if (r.role === '测试工程师') testIdleMd += r.idleMd;
+      });
+
+      return {
+        ...team, totalCapacityMd, allocatedMd, idleMd, devIdleMd, testIdleMd,
+        memberCount: teamResources.length,
+        utilization: totalCapacityMd > 0 ? (allocatedMd / totalCapacityMd) * 100 : 0
+      };
+    });
+
+    const unassignedResources = idle.filter(r => !r.scrumTeamId);
+    if (unassignedResources.length > 0) {
+      let totalCapacityMd = 0; let allocatedMd = 0; let idleMd = 0; let devIdleMd = 0; let testIdleMd = 0;
+      unassignedResources.forEach(r => {
+        totalCapacityMd += r.capacityMd; allocatedMd += r.allocatedMd; idleMd += r.idleMd;
+        if (['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)) devIdleMd += r.idleMd;
+        else if (r.role === '测试工程师') testIdleMd += r.idleMd;
+      });
+      teamCapacities.push({
+        id: -1, name: '未分配 Scrum 团队', totalCapacityMd, allocatedMd, idleMd, devIdleMd, testIdleMd,
+        memberCount: unassignedResources.length, utilization: totalCapacityMd > 0 ? (allocatedMd / totalCapacityMd) * 100 : 0
+      });
+    }
+
+    return { gaps, idle: activeIdle, teamCapacities };
   };
 
-  const { readyProjects, pendingProjects, projectGaps, resourceIdle } = useMemo(() => {
-    if (!projects || !resources || !allocations) return { readyProjects: [], pendingProjects: [], projectGaps: [], resourceIdle: [] };
+  const [workingDaySet, setWorkingDaySet] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    import('../../utils/dateUtils').then(m => {
+      const rangeStart = new Date(selectedYear, startMonth - 1, 1);
+      const rangeEnd = new Date(selectedYear, endMonth, 0);
+      m.buildWorkingDaySet(rangeStart, rangeEnd).then(setWorkingDaySet);
+    });
+  }, [selectedYear, startMonth, endMonth]);
+
+  const { readyProjects, pendingProjects, projectGaps, resourceIdle, teamCapacities } = useMemo(() => {
+    if (!projects || !resources || !allocations || workingDaySet.size === 0) return { readyProjects: [], pendingProjects: [], projectGaps: [], resourceIdle: [], teamCapacities: [] };
     const ready = projects.filter(p => p.devTotalMd > 0 || p.testTotalMd > 0);
     const pending = projects.filter(p => p.devTotalMd === 0 && p.testTotalMd === 0);
-    const { gaps, idle } = runAuditForUI(ready, resources, allocations);
-    return { readyProjects: ready, pendingProjects: pending, projectGaps: gaps, resourceIdle: idle };
-  }, [projects, resources, allocations, selectedYear, startMonth, endMonth, displayWeeks]);
+    const { gaps, idle, teamCapacities } = runAuditForUI(ready, resources, allocations, scrumTeams || [], workingDaySet);
+    return { readyProjects: ready, pendingProjects: pending, projectGaps: gaps, resourceIdle: idle, teamCapacities };
+  }, [projects, resources, allocations, scrumTeams, selectedYear, startMonth, endMonth, displayWeeks, workingDaySet]);
 
-  const scheduledProjectsList = useMemo(() => {
-    if (!projects || !allocations || !resources) return [];
+  const { fullyScheduledProjects, partiallyScheduledProjects, unscheduledProjects } = useMemo(() => {
+    if (!projects || !allocations || !resources) return { fullyScheduledProjects: [], partiallyScheduledProjects: [], unscheduledProjects: [] };
     const ready = projects.filter(p => p.devTotalMd > 0 || p.testTotalMd > 0);
-    // Single source of truth: a required dimension counts as "done" when its
-    // remaining gap (after subtracting Jira-consumed MD AND existing allocations)
-    // drops below 1 MD. This credits work already consumed in Jira even when no
-    // new allocation was created for it, so a project whose dev/test was finished
-    // in Jira still shows as 已排 instead of silently disappearing.
+    
     const gapById = new Map(
       computeProjectGaps(ready, resources, allocations).map(g => [Number(g.id), g])
     );
-    return ready.filter(p => {
-      const g = gapById.get(Number(p.id));
-      if (!g) return false;
+
+    let globalDevIdle = 0;
+    let globalTestIdle = 0;
+    resourceIdle.forEach(r => {
+      if (['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)) globalDevIdle += r.idleMd;
+      if (r.role === '测试工程师') globalTestIdle += r.idleMd;
+    });
+
+    const enriched = ready.map(p => {
+      const g = gapById.get(Number(p.id)) || { devGap: p.devTotalMd, testGap: p.testTotalMd };
       const devDone = p.devTotalMd <= 0 || Math.ceil(g.devGap) < 1;
       const testDone = p.testTotalMd <= 0 || Math.ceil(g.testGap) < 1;
-      // 已排满 = every required dimension's remaining work is fully covered.
-      return devDone && testDone;
-    }).map(p => {
+      
       const pAllocs = allocations.filter(a => Number(a.projectId) === Number(p.id));
       const devs = Array.from(new Set(pAllocs.filter(a => {
         const res = resources.find(r => Number(r.id) === Number(a.resourceId));
@@ -116,12 +255,48 @@ export const Dashboard = () => {
         const res = resources.find(r => Number(r.id) === Number(a.resourceId));
         return a.allocationType === 'test' || (res && res.role === '测试工程师');
       }).map(a => resources.find(r => r.id === a.resourceId)?.name))).filter(Boolean);
-      // A required dimension fully covered by Jira consumption has no new allocation.
-      const devViaJira = p.devTotalMd > 0 && devs.length === 0;
-      const testViaJira = p.testTotalMd > 0 && testers.length === 0;
-      return { ...p, assignedDevs: devs.join(', '), assignedTesters: testers.join(', '), allPersonnel: [...new Set([...devs, ...testers])].join(', '), devViaJira, testViaJira };
-    });
-  }, [projects, allocations, resources]);
+      
+      const devViaJira = p.devTotalMd > 0 && devs.length === 0 && Math.ceil(g.devGap) < 1;
+      const testViaJira = p.testTotalMd > 0 && testers.length === 0 && Math.ceil(g.testGap) < 1;
+      
+      const isFullyScheduled = devDone && testDone;
+      const hasAllocations = pAllocs.length > 0;
+
+      const reasonMap: Record<string, string> = {
+        'lead_not_idle': 'Lead 不可用',
+        'no_dev_capacity': '开发容量不足',
+        'no_test_capacity': '测试容量不足',
+        'date_window_exceeded': '时间窗口不足',
+        'weekly_exclusivity_conflict': '单周并行冲突',
+        'scrum_constraint_violated': '指定团队容量不足'
+      };
+
+      let reason = '';
+      if (!isFullyScheduled && p.rejectionReason) {
+        reason = reasonMap[p.rejectionReason] || p.rejectionReason;
+      }
+
+      return { 
+        ...p, 
+        assignedDevs: devs.join(', '), 
+        assignedTesters: testers.join(', '), 
+        allPersonnel: [...new Set([...devs, ...testers])].join(', '), 
+        devViaJira, 
+        testViaJira,
+        devGap: g.devGap,
+        testGap: g.testGap,
+        isFullyScheduled,
+        hasAllocations,
+        unscheduledReason: reason
+      };
+    }).sort((a, b) => Number(a.id) - Number(b.id));
+
+    return {
+      fullyScheduledProjects: enriched.filter(p => p.isFullyScheduled),
+      partiallyScheduledProjects: enriched.filter(p => !p.isFullyScheduled && p.hasAllocations),
+      unscheduledProjects: enriched.filter(p => !p.isFullyScheduled && !p.hasAllocations)
+    };
+  }, [projects, allocations, resources, resourceIdle]);
 
   return (
     <div className="space-y-6 pb-20">
@@ -170,7 +345,11 @@ export const Dashboard = () => {
             </select>
           </div>
 
-
+          <div className="flex items-center space-x-1 px-2 border-l border-gray-100">
+            <button onClick={() => { setStartMonth(currentMonth); setEndMonth(Math.min(12, currentMonth + 2)); }} className="px-2 py-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded">本月起3个月</button>
+            <button onClick={() => { const qStart = Math.floor((currentMonth - 1) / 3) * 3 + 1; setStartMonth(qStart); setEndMonth(qStart + 2); }} className="px-2 py-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded">本季度</button>
+            <button onClick={() => { const nextQStart = Math.floor((currentMonth - 1) / 3) * 3 + 4; if (nextQStart <= 10) { setStartMonth(nextQStart); setEndMonth(nextQStart + 2); } }} className="px-2 py-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded" title={Math.floor((currentMonth - 1) / 3) * 3 + 4 > 10 ? "已至四季度" : ""}>下季度</button>
+          </div>
           {isScheduling ? (
             <button 
               onClick={stopScheduling}
@@ -265,68 +444,114 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      {/* Scheduled Projects Box */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div 
-          className="p-4 border-b border-gray-100 bg-blue-50/20 flex justify-between items-center cursor-pointer hover:bg-blue-50/40 transition-colors"
-          onClick={() => setIsScheduledExpanded(!isScheduledExpanded)}
-        >
-          <h3 className="font-bold text-gray-900 text-sm flex items-center space-x-2">
-            <CheckCircle2 size={16} className="text-green-500" />
-            <span>已排项目 (共 {scheduledProjectsList.length} 个)</span>
-          </h3>
-          <button className="text-gray-400 hover:text-gray-600 transition-colors">
-            {isScheduledExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          </button>
-        </div>
-        {isScheduledExpanded && (
-          <div className="p-0 overflow-x-auto animate-in slide-in-from-top-2 duration-200">
-            {scheduledProjectsList.length === 0 ? (
-              <p className="text-gray-400 text-center py-8 text-xs italic">当前暂无完整排期的项目</p>
-            ) : (
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-gray-200 text-gray-400 font-black uppercase tracking-widest bg-gray-50/10">
-                    <th className="p-4">项目名称</th>
-                    <th className="p-4">开发负责人</th>
-                    <th className="p-4">测试负责人</th>
-                    <th className="p-4">所有参与人员</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scheduledProjectsList.map((p: any) => (
-                    <tr key={p.id} className="border-b border-gray-100 hover:bg-green-50/10 transition-colors">
-                      <td className="p-4 font-black text-gray-900">{p.name}</td>
-                      <td className="p-4 text-gray-600 font-medium">{p.projectTechLead || '-'}</td>
-                      <td className="p-4 text-gray-600 font-medium">{p.projectQualityLead || '-'}</td>
-                      <td className="p-4">
-                        <div className="flex flex-wrap gap-1 items-center">
-                          {p.allPersonnel && p.allPersonnel.split(', ').map((name: string) => (
-                            <span key={name} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold">
-                              {name}
-                            </span>
-                          ))}
-                          {p.devViaJira && (
-                            <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold">开发·Jira工时已消耗</span>
-                          )}
-                          {p.testViaJira && (
-                            <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold">测试·Jira工时已消耗</span>
-                          )}
-                          {!p.allPersonnel && !p.devViaJira && !p.testViaJira && (
-                            <span className="text-gray-400 text-[10px]">-</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+      {/* Scrum Team Capacities Box */}
+      {(view === 'all' || view === 'gaps') && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+          <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center space-x-2">
+            <Users size={16} className="text-gray-600" />
+            <h3 className="font-bold text-gray-900 text-sm">Scrum 团队容量 (当前选定时段)</h3>
           </div>
-        )}
-      </div>
+          <div className="p-0 overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 font-black uppercase tracking-widest bg-gray-50/50">
+                  <th className="p-3">Scrum 团队</th>
+                  <th className="p-3 text-center">成员数</th>
+                  <th className="p-3 text-center">总容量</th>
+                  <th className="p-3 text-center">已用容量</th>
+                  <th className="p-3 text-center">剩余总容量</th>
+                  <th className="p-3 text-center text-blue-600">开发剩余</th>
+                  <th className="p-3 text-center text-teal-600">测试剩余</th>
+                  <th className="p-3 text-center">饱和度</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teamCapacities.map(team => (
+                  <tr key={team.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                    <td className="p-3 font-bold text-gray-900">{team.name}</td>
+                    <td className="p-3 text-center text-gray-600">{team.memberCount}</td>
+                    <td className="p-3 text-center text-gray-600 font-mono">{Math.round(team.totalCapacityMd)}d</td>
+                    <td className="p-3 text-center text-gray-600 font-mono">{Math.round(team.allocatedMd)}d</td>
+                    <td className="p-3 text-center font-bold text-gray-900 font-mono">{Math.round(team.idleMd)}d</td>
+                    <td className="p-3 text-center font-bold text-blue-600 font-mono">{Math.round(team.devIdleMd)}d</td>
+                    <td className="p-3 text-center font-bold text-teal-600 font-mono">{Math.round(team.testIdleMd)}d</td>
+                    <td className="p-3 text-center">
+                      <div className="flex flex-col items-center">
+                        <div className="w-16 bg-gray-100 h-1.5 rounded-full mb-1 overflow-hidden">
+                          <div className={`h-full rounded-full ${team.utilization > 90 ? 'bg-red-400' : team.utilization > 70 ? 'bg-orange-400' : 'bg-green-400'}`} style={{ width: `${Math.min(100, team.utilization)}%` }}></div>
+                        </div>
+                        <span className="text-[9px] font-bold text-gray-500">{team.utilization.toFixed(0)}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {teamCapacities.length === 0 && (
+                  <tr><td colSpan={8} className="p-8 text-center text-gray-400 italic">暂无团队人员数据</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Scheduled Projects Box */}
+      {(view === 'all' || view === 'scheduled') && (
+      <>
+      {/* Fully Scheduled */}
+      <ProjectScheduleSection
+        title="已排满项目"
+        count={fullyScheduledProjects.length}
+        projects={fullyScheduledProjects}
+        isExpanded={isScheduledExpanded}
+        setIsExpanded={setIsScheduledExpanded}
+        icon={CheckCircle2}
+        bgColor="bg-green-50/30"
+        textColor="text-green-800"
+        borderColor="border-green-200"
+        hoverColor="hover:bg-green-50/50"
+        showGaps={false}
+        showReason={false}
+        emptyMessage="暂无完全排满的项目"
+      />
+
+      {/* Partially Scheduled */}
+      <ProjectScheduleSection
+        title="部分排上项目"
+        count={partiallyScheduledProjects.length}
+        projects={partiallyScheduledProjects}
+        isExpanded={isPartiallyScheduledExpanded}
+        setIsExpanded={setIsPartiallyScheduledExpanded}
+        icon={AlertTriangle}
+        bgColor="bg-orange-50/30"
+        textColor="text-orange-800"
+        borderColor="border-orange-200"
+        hoverColor="hover:bg-orange-50/50"
+        showGaps={true}
+        showReason={false}
+        emptyMessage="暂无部分排上的项目"
+      />
+
+      {/* Unscheduled */}
+      <ProjectScheduleSection
+        title="排不上项目"
+        count={unscheduledProjects.length}
+        projects={unscheduledProjects}
+        isExpanded={isUnscheduledExpanded}
+        setIsExpanded={setIsUnscheduledExpanded}
+        icon={X}
+        bgColor="bg-red-50/30"
+        textColor="text-red-800"
+        borderColor="border-red-200"
+        hoverColor="hover:bg-red-50/50"
+        showGaps={true}
+        showReason={true}
+        emptyMessage="暂无排不上的项目"
+      />
+      </>
+      )}
 
       {/* Main Table */}
+      {(view === 'all' || view === 'allocations') && (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div 
           className="p-4 border-b border-gray-100 bg-gray-50/30 flex justify-between items-center cursor-pointer hover:bg-gray-50/50 transition-colors"
@@ -454,7 +679,10 @@ export const Dashboard = () => {
           </div>
         )}
       </div>
+      )}
 
+      {(view === 'all' || view === 'gaps') && (
+      <>
       <div className="grid grid-cols-2 gap-6 mt-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div 
@@ -470,10 +698,10 @@ export const Dashboard = () => {
             </button>
           </div>
           {isGapsExpanded && (
-          <div className="p-0 animate-in slide-in-from-top-2 duration-200">{(!projectGaps.length) ? <p className="text-gray-400 text-center py-8 text-xs font-medium italic">所有项目均已获得足额排期</p> : (
+          <div className="p-0 animate-in slide-in-from-top-2 duration-200">{(!unscheduledProjects.length && !partiallyScheduledProjects.length) ? <p className="text-gray-400 text-center py-8 text-xs font-medium italic">所有项目均已获得足额排期</p> : (
             <table className="w-full text-left border-collapse text-xs">
               <thead><tr className="border-b border-gray-100 text-gray-400 font-black uppercase tracking-tighter bg-gray-50/20"><th className="p-3">项目名称</th><th className="p-3 text-center text-orange-600">开发缺口</th><th className="p-3 text-center text-teal-600">测试缺口</th></tr></thead>
-              <tbody>{projectGaps.map(p => (
+              <tbody>{[...partiallyScheduledProjects, ...unscheduledProjects].map(p => (
                 <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                   <td className="p-3 font-bold text-gray-900">{p.name}</td>
                   <td className="p-3 text-center">{p.devGap > 0 ? <span className="font-mono font-bold text-orange-600">{Math.round(p.devGap)}d</span> : <span className="text-gray-200">-</span>}</td>
@@ -545,6 +773,8 @@ export const Dashboard = () => {
         )}</div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };

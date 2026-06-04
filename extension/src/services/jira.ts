@@ -126,7 +126,7 @@ interface EpicMeta {
  * matched in the roster, that portion falls back to the issue-type heuristic
  * (testIssueTypes). Also collects the Epic status and Story/Task/Bug child counts.
  */
-export const syncEpicLoggedHours = async (epicKeys: string[], roster: RosterMember[] = [], unmatchedCollector?: Record<string, UnmatchedAuthor>): Promise<Record<string, EpicHours>> => {
+export const syncEpicLoggedHours = async (epicKeys: string[], roster: RosterMember[] = [], unmatchedCollector?: Record<string, UnmatchedAuthor>, startDate?: string, endDate?: string): Promise<Record<string, EpicHours>> => {
   const settings = await getJiraSettings();
   if (!settings) throw new Error('Jira 设置未配置 (Jira settings not configured).');
 
@@ -362,7 +362,13 @@ export const syncEpicLoggedHours = async (epicKeys: string[], roster: RosterMemb
     // targetEpicKeys only contains standard Jira keys discovered from Step 1,
     // so using 'parent in' and 'issueKey in' is 100% safe. We remove projectJql constraint here to avoid
     // skipping child issues that belong to different projects.
-    const jql = `(parent in (${chunkStr}) OR cf[${epicLinkFieldId}] in (${chunkStr}) OR issueKey in (${chunkStr}))`;
+    let jql = `(parent in (${chunkStr}) OR cf[${epicLinkFieldId}] in (${chunkStr}) OR issueKey in (${chunkStr}))`;
+    if (startDate) {
+      jql += ` AND worklogDate >= "${startDate}"`;
+    }
+    if (endDate) {
+      jql += ` AND worklogDate <= "${endDate}"`;
+    }
 
     let nextPageToken: string | undefined;
     let hasMore = true;

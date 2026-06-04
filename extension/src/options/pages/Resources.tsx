@@ -9,6 +9,7 @@ import { ErrorModal } from '../components/ErrorModal';
 export const Resources = () => {
   const resources = useLiveQuery(() => db.resources.toArray());
   const allSkills = useLiveQuery(() => db.skills.toArray());
+  const scrumTeams = useLiveQuery(() => db.scrumTeams.toArray());
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [showModal, setShowModal] = useState(false);
@@ -130,16 +131,21 @@ export const Resources = () => {
   const exportToCSV = () => {
     if (!resources || resources.length === 0) return;
     
-    const headers = ['Name', 'Role', 'Capacity %', 'Skills', 'Jira Aliases'];
+    const headers = ['Name', 'Role', 'Capacity %', 'Skills', 'Jira Aliases', 'Scrum Team', 'Unavailable Dates'];
     const csvContent = [
       headers.join(','),
-      ...resources.map(r => [
-        `"${r.name}"`,
-        `"${r.role}"`,
-        r.capacity,
-        `"${r.skills.join(', ')}"`,
-        `"${(r.jiraAliases || '').replace(/"/g, '""')}"`
-      ].join(','))
+      ...resources.map(r => {
+        const team = scrumTeams?.find(t => t.id === r.scrumTeamId);
+        return [
+          `"${r.name}"`,
+          `"${r.role}"`,
+          r.capacity,
+          `"${r.skills.join(', ')}"`,
+          `"${(r.jiraAliases || '').replace(/"/g, '""')}"`,
+          `"${team ? team.name : ''}"`,
+          `"${(r.unavailableDates || []).join(', ')}"`
+        ].join(',');
+      })
     ].join('\n');
 
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -221,6 +227,7 @@ export const Resources = () => {
             <tr className="bg-gray-50/50 border-b border-gray-200 text-gray-400 text-[10px] font-black uppercase tracking-widest">
               <th className="p-4">团队成员</th>
               <th className="p-4">专业角色</th>
+              <th className="p-4">所属 Scrum</th>
               <th className="p-4 text-center">当前负荷</th>
               <th className="p-4">技能标签</th>
               <th className="p-4 text-right">操作管理</th>
@@ -252,6 +259,15 @@ export const Resources = () => {
                   }`}>
                     {r.role}
                   </span>
+                </td>
+                <td className="p-4">
+                  {r.scrumTeamId ? (
+                    <span className="px-2.5 py-1 bg-orange-50 text-orange-600 border border-orange-100 rounded-md text-[10px] font-bold uppercase">
+                      {scrumTeams?.find(t => t.id === r.scrumTeamId)?.name || '未知'}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300 text-xs">-</span>
+                  )}
                 </td>
                 <td className="p-4">
                   <div className="flex flex-col items-center space-y-1">

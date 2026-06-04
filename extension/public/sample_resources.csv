@@ -1,5 +1,5 @@
-Name,Role,Capacity %,Skills
-"Liang","全栈工程师",100,"Order, Checkout & Payment, AI Coding, AI Agent/MCP/Skills"
-"Big Checker","测试工程师",100,"Fulfillment, POS, Automation Test, Data Quality"
-"Alex Wong","后端工程师",80,"Stock, Finance, Big Data"
-"Sarah Lee","前端工程师",100,"Transaction, Product Offer, In-Store Ops"
+Name,Role,Capacity %,Skills,Jira Aliases,Scrum Team,Unavailable Dates
+"Liang","全栈工程师",100,"Order, Checkout & Payment, AI Coding, AI Agent/MCP/Skills","liang@example.com","Alpha Team","2026-05-01, 2026-05-02"
+"Big Checker","测试工程师",100,"Fulfillment, POS, Automation Test, Data Quality","checker_123","Beta Team",""
+"Alex Wong","后端工程师",80,"Stock, Finance, Big Data","","Alpha Team",""
+"Sarah Lee","前端工程师",100,"Transaction, Product Offer, In-Store Ops","sarah_lee","",""

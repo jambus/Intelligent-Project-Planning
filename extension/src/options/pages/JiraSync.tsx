@@ -14,6 +14,19 @@ export const JiraSync = () => {
   const [unmatchedAuthors, setUnmatchedAuthors] = useState<UnmatchedAuthor[]>([]);
   const [authorAssign, setAuthorAssign] = useState<Record<string, number>>({});
 
+  const now = new Date();
+  const defaultStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  const formatDate = (d: Date) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const [startDate, setStartDate] = useState(formatDate(defaultStart));
+  const [endDate, setEndDate] = useState(formatDate(defaultEnd));
   
   const projects = useLiveQuery(() => db.projects.toArray());
   const resources = useLiveQuery(() => db.resources.toArray());
@@ -61,7 +74,7 @@ export const JiraSync = () => {
         name: r.name,
         role: r.role,
         aliases: (r.jiraAliases || '').split(/[,，\n]/).map(s => s.trim()).filter(Boolean)
-      })), unmatchedCollector);
+      })), unmatchedCollector, startDate, endDate);
 
       let done = 0;
       for (const p of targets) {
@@ -144,6 +157,22 @@ export const JiraSync = () => {
           <p className="text-gray-500 text-sm mt-1">同步 Epic 已录入工时，系统排期时将自动扣减这些已发生工时。</p>
         </div>
         <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+            <span className="text-sm text-gray-500 font-medium">同步范围:</span>
+            <input 
+              type="date" 
+              value={startDate} 
+              onChange={e => setStartDate(e.target.value)}
+              className="bg-transparent border-none text-sm outline-none text-gray-700 font-medium cursor-pointer"
+            />
+            <span className="text-gray-400">至</span>
+            <input 
+              type="date" 
+              value={endDate} 
+              onChange={e => setEndDate(e.target.value)}
+              className="bg-transparent border-none text-sm outline-none text-gray-700 font-medium cursor-pointer"
+            />
+          </div>
           {syncProgress && (
             <div className="flex items-center space-x-3 bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
               <div className="w-32 h-2 bg-blue-200 rounded-full overflow-hidden">

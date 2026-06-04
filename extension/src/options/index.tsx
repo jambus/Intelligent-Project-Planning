@@ -8,6 +8,7 @@ import { Resources } from './pages/Resources';
 import { Settings } from './pages/Settings';
 import { Holidays } from './pages/Holidays';
 import { Skills } from './pages/Skills';
+import { ScrumTeams } from './pages/ScrumTeams';
 import { ProductOps } from './pages/ProductOps';
 import { JiraSync } from './pages/JiraSync';
 import { SchedulingProvider } from '../context/SchedulingContext';
@@ -22,10 +23,14 @@ if (container) {
         <HashRouter>
           <Routes>
             <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
+              <Route index element={<Dashboard view="all" />} />
+              <Route path="scheduled" element={<Dashboard view="scheduled" />} />
+              <Route path="allocations" element={<Dashboard view="allocations" />} />
+              <Route path="gaps" element={<Dashboard view="gaps" />} />
               <Route path="projects" element={<Projects />} />
               <Route path="jira-sync" element={<JiraSync />} />
               <Route path="resources" element={<Resources />} />
+              <Route path="scrum" element={<ScrumTeams />} />
               <Route path="skills" element={<Skills />} />
               <Route path="product-ops" element={<ProductOps />} />
               <Route path="holidays" element={<Holidays />} />

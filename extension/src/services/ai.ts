@@ -21,8 +21,9 @@ CRITICAL INSTRUCTIONS:
    - "focused" (单人模式): {{strategyFocused}}
    - "balanced" (均衡模式): {{strategyBalanced}}
    - "urgent" (进阶模式): {{strategyUrgent}}
-3. SKILL-BASED MATCHING: Use "techStack", "domain", and especially "detailsProductDevMd" / "detailsProductTestMd" to match resources with the right "skills".
+3. SKILL-BASED MATCHING & TEAM CONSTRAINTS: Use "techStack", "domain", and "detailsProductDevMd" / "detailsProductTestMd" to match resources with the right "skills".
    - Priority: Match person's skills to the specific products/tasks mentioned in the project details.
+   - SCRUM TEAM CONSTRAINTS (CRITICAL): A project may have an "allowedResourceIds" array. If it exists and is not empty, you MUST ONLY assign resources whose ID is in that array. Assignments outside this array will be REJECTED by JS hard logic.
 4. MAXIMIZE UTILIZATION: You MUST allocate ALL available "idleMd" across ALL candidate resources. 
 5. MINIMAL FRAGMENTATION & SINGLE PROJECT PER WEEK: 
    - A resource can ONLY be assigned to ONE project per week. Do not fragment their time across multiple projects in the same week.
@@ -164,6 +165,7 @@ export const suggestAllocationsForBatch = async (
     detailsProductDevMd?: string;
     detailsProductTestMd?: string;
     schedulingStrategy?: 'balanced' | 'focused' | 'urgent';
+    allowedResourceIds?: number[];
   }[],
   idleResources: { id: number; name: string; role: string; idleMd: number; skills: string[]; scheduleSummary?: string }[],
   phase: 'dev' | 'test',

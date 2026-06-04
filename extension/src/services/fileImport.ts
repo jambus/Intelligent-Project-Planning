@@ -66,6 +66,27 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
       const idxDetailsTestMd = findColumnIndex(headers, ['details product test md', 'details test md']);
       const idxTechStack = findColumnIndex(headers, ['tech stack', '技术栈']);
       const idxDomain = findColumnIndex(headers, ['domain', '产品域', '业务域']);
+      const idxScrum = findColumnIndex(headers, ['scrum', 'scrum team', '所属 scrum', '团队', 'scrum 组']);
+      const idxTeamMode = findColumnIndex(headers, ['team scheduling mode', '排期模式', '团队模式', '约束模式']);
+
+      const existingScrums = await db.scrumTeams.toArray();
+      const scrumMap = new Map<string, number>();
+      existingScrums.forEach(s => scrumMap.set(s.name.toLowerCase(), s.id!));
+      const newScrumsToInsert = new Set<string>();
+
+      // Check for new scrums
+      rows.slice(1).forEach(row => {
+        if (!row || !Array.isArray(row)) return;
+        const rawScrumName = idxScrum !== -1 ? row[idxScrum]?.toString().trim() || '' : '';
+        if (rawScrumName && !scrumMap.has(rawScrumName.toLowerCase())) {
+          newScrumsToInsert.add(rawScrumName);
+        }
+      });
+
+      for (const scrumName of Array.from(newScrumsToInsert)) {
+        const newId = await db.scrumTeams.add({ name: scrumName });
+        scrumMap.set(scrumName.toLowerCase(), newId as number);
+      }
 
       const sheetProjects = rows.slice(1).map(row => {
         if (!row || !Array.isArray(row)) return null;
@@ -82,6 +103,19 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
         let defaultStrategy: 'balanced' | 'focused' | 'urgent' = 'focused';
         if (isHighPriority && isLargeDevProject) {
           defaultStrategy = 'balanced';
+        }
+        
+        const rawScrumName = idxScrum !== -1 ? row[idxScrum]?.toString().trim() || '' : '';
+        const scrumTeamId = rawScrumName ? scrumMap.get(rawScrumName.toLowerCase()) : undefined;
+        
+        let teamModeStr = idxTeamMode !== -1 ? row[idxTeamMode]?.toString().trim().toLowerCase() || '' : '';
+        let teamSchedulingMode: 'team-first' | 'cross-team' | 'all-in' = scrumTeamId ? 'cross-team' : 'all-in';
+        if (teamModeStr.includes('team-first') || teamModeStr.includes('本队') || teamModeStr.includes('专属')) {
+           teamSchedulingMode = 'team-first';
+        } else if (teamModeStr.includes('cross-team') || teamModeStr.includes('跨队') || teamModeStr.includes('协作')) {
+           teamSchedulingMode = 'cross-team';
+        } else if (teamModeStr.includes('all-in') || teamModeStr.includes('全局') || teamModeStr.includes('统筹')) {
+           teamSchedulingMode = 'all-in';
         }
         
         return {
@@ -104,6 +138,8 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
           techStack: idxTechStack !== -1 ? row[idxTechStack]?.toString() || '' : '',
           domain: idxDomain !== -1 ? row[idxDomain]?.toString() || '' : '',
           schedulingStrategy: defaultStrategy,
+          ...(scrumTeamId ? { scrumTeamId } : {}),
+          teamSchedulingMode,
         };
       }).filter((p): p is any => p !== null && (p.name !== 'Unknown Project' || p.businessOwner !== ''));
 
@@ -145,18 +181,45 @@ export const importResourcesFromFile = async (files: File | FileList | File[]): 
       const idxCapacity = findColumnIndex(headers, ['capacity', '负荷', '可用负荷', '投入比']);
       const idxSkills = findColumnIndex(headers, ['skills', '技能', '标签', '核心技能']);
       const idxJiraAliases = findColumnIndex(headers, ['jira aliases', 'jira id', 'jira别名', 'jira账号', 'jira映射']);
+      const idxScrum = findColumnIndex(headers, ['scrum', 'scrum team', '所属 scrum', '团队', 'scrum 组']);
+      const idxUnavailable = findColumnIndex(headers, ['unavailable dates', 'unavailable', '请假', '休假', '不可用日期']);
+
+      const existingScrums = await db.scrumTeams.toArray();
+      const scrumMap = new Map<string, number>();
+      existingScrums.forEach(s => scrumMap.set(s.name.toLowerCase(), s.id!));
+      const newScrumsToInsert = new Set<string>();
+
+      // Check for new scrums
+      rows.slice(1).forEach(row => {
+        if (!row || !Array.isArray(row)) return;
+        const rawScrumName = idxScrum !== -1 ? row[idxScrum]?.toString().trim() || '' : '';
+        if (rawScrumName && !scrumMap.has(rawScrumName.toLowerCase())) {
+          newScrumsToInsert.add(rawScrumName);
+        }
+      });
+
+      for (const scrumName of Array.from(newScrumsToInsert)) {
+        const newId = await db.scrumTeams.add({ name: scrumName });
+        scrumMap.set(scrumName.toLowerCase(), newId as number);
+      }
 
       const sheetResources = rows.slice(1).map(row => {
         if (!row || !Array.isArray(row)) return null;
         const rawSkills = idxSkills !== -1 ? row[idxSkills]?.toString() || '' : '';
         const rawCapacity = idxCapacity !== -1 ? row[idxCapacity]?.toString() || '100' : '100';
         const rawAliases = idxJiraAliases !== -1 ? row[idxJiraAliases]?.toString() || '' : '';
+        const rawScrumName = idxScrum !== -1 ? row[idxScrum]?.toString().trim() || '' : '';
+        const scrumTeamId = rawScrumName ? scrumMap.get(rawScrumName.toLowerCase()) : undefined;
+        const rawUnavailable = idxUnavailable !== -1 ? row[idxUnavailable]?.toString().trim() || '' : '';
+        const unavailableDates = rawUnavailable ? rawUnavailable.split(/[,,，，\n]/).map((d: string) => d.trim()).filter(Boolean) : undefined;
         return {
           name: idxName !== -1 ? row[idxName]?.toString() || 'Unknown' : 'Unknown',
           role: idxRole !== -1 ? row[idxRole]?.toString() || '前端工程师' : '前端工程师',
           capacity: Number(rawCapacity.replace('%', '')) || 100,
           skills: rawSkills.split(/[,,，，]/).map((s: string) => s.trim()).filter(Boolean),
-          ...(rawAliases ? { jiraAliases: rawAliases } : {})
+          ...(rawAliases ? { jiraAliases: rawAliases } : {}),
+          ...(scrumTeamId ? { scrumTeamId } : {}),
+          ...(unavailableDates && unavailableDates.length > 0 ? { unavailableDates } : {})
         };
       }).filter((r): r is any => r !== null && r.name !== 'Unknown');
 
