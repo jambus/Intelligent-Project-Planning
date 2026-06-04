@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.6] - 2026-06-04
+## [1.0.6] - 2026-06-05
 
 ### 新特性 (New Features)
 - **Scrum 团队管理 (Scrum Team Management)**：
