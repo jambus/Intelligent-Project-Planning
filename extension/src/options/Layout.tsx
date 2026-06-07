@@ -10,9 +10,9 @@ export const Layout = () => {
       icon: <LayoutDashboard size={20} />,
       subItems: [
         { name: '全局概览', path: '/' },
-        { name: '已排项目', path: '/scheduled' },
-        { name: '已排期任务详情', path: '/allocations' },
-        { name: '待跟进事项', path: '/gaps' },
+        { name: '团队容量', path: '/team-capacity' },
+        { name: '项目排期结果', path: '/project-results' },
+        { name: '排期明细矩阵', path: '/schedule-details' },
       ]
     },
     { name: '项目管理', path: '/projects', icon: <FolderKanban size={20} /> },

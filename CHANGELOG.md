@@ -12,6 +12,10 @@
 - **项目与团队配置连动联动 (Team Config Cascade)**：
   - 级联删除优化：在「Scrum 管理」解散团队时，系统不仅清理人员归属，还会将对应项目的 `scrumTeamId` 设为空，并强制降级调度模式为 `all-in`（全局统筹），防止项目因找不到废弃团队的人员陷入排期死锁。
   - 在「项目配置」页修改策略或 Scrum 约束条件时，系统会自动清空上一次遗留的 `rejectionReason`（排不上原因），避免大盘状态未更新产生视觉误导。
+- **排期大盘深度重构与架构升级 (Dashboard Refactoring & Architecture)**：
+  - **核心计算与状态下沉**：引入全局 `DashboardContext` 上下文，统一接管所有 IndexedDB `useLiveQuery` 订阅以及重量级的缺口/容量计算 (`runAuditForUI`)，彻底解决了页面切换带来的状态重置与重复渲染问题，实现了跨页面的 Single Source of Truth。
+  - **页面精细化拆分**：将原先臃肿的单一大盘拆解为 4 个职责单一、高内聚的子页面组件：`DashboardOverview` (全局概览与排期控制台)、`TeamCapacity` (团队容量监控)、`ProjectResults` (排期异常及结果展示) 和 `ScheduleDetails` (排期明细大矩阵)，极大提升了代码可维护性和用户浏览体验。
+  - **概览面板增强**：在全局概览页面，移除了原有的“最紧张的团队 Top 3”局部视图，直接升级为展示完整的“Scrum 团队容量 (当前选定时段)”看板，让全局负荷水位一目了然。
 
 ## [1.0.6] - 2026-06-05
 
