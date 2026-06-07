@@ -1,28 +1,30 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, Users2, Settings, FolderKanban, CalendarDays, Tags, Wrench, RefreshCw } from 'lucide-react';
+import { useTranslation } from '../context/I18nContext';
 
 export const Layout = () => {
   const location = useLocation();
+  const { t } = useTranslation();
 
   const navItems = [
     { 
-      name: '资源大盘', 
+      name: t('nav.dashboard'), 
       icon: <LayoutDashboard size={20} />,
       subItems: [
-        { name: '全局概览', path: '/' },
-        { name: '团队容量', path: '/team-capacity' },
-        { name: '项目排期结果', path: '/project-results' },
-        { name: '排期明细矩阵', path: '/schedule-details' },
+        { name: t('nav.overview'), path: '/' },
+        { name: t('nav.teamCapacity'), path: '/team-capacity' },
+        { name: t('nav.projectResults'), path: '/project-results' },
+        { name: t('nav.scheduleDetails'), path: '/schedule-details' },
       ]
     },
-    { name: '项目管理', path: '/projects', icon: <FolderKanban size={20} /> },
-    { name: 'Jira 管理', path: '/jira-sync', icon: <RefreshCw size={20} /> },
-    { name: '人员管理', path: '/resources', icon: <Users size={20} /> },
-    { name: 'Scrum 管理', path: '/scrum', icon: <Users2 size={20} /> },
-    { name: '技能管理', path: '/skills', icon: <Tags size={20} /> },
-    { name: '产品运维', path: '/product-ops', icon: <Wrench size={20} /> },
-    { name: '节假日管理', path: '/holidays', icon: <CalendarDays size={20} /> },
-    { name: '系统设置', path: '/settings', icon: <Settings size={20} /> },
+    { name: t('nav.projects'), path: '/projects', icon: <FolderKanban size={20} /> },
+    { name: t('nav.jiraSync'), path: '/jira-sync', icon: <RefreshCw size={20} /> },
+    { name: t('nav.resources'), path: '/resources', icon: <Users size={20} /> },
+    { name: t('nav.scrum'), path: '/scrum', icon: <Users2 size={20} /> },
+    { name: t('nav.skills'), path: '/skills', icon: <Tags size={20} /> },
+    { name: t('nav.productOps'), path: '/product-ops', icon: <Wrench size={20} /> },
+    { name: t('nav.holidays'), path: '/holidays', icon: <CalendarDays size={20} /> },
+    { name: t('nav.settings'), path: '/settings', icon: <Settings size={20} /> },
   ];
 
   const version = typeof chrome !== 'undefined' && chrome.runtime?.getManifest 
@@ -36,7 +38,7 @@ export const Layout = () => {
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3 mb-1">
             <img src="/icons/icon_128.png" alt="IRP Logo" className="w-8 h-8 rounded-lg shadow-sm" />
-            <h1 className="text-xl font-bold text-blue-600 tracking-tight">智能排期系统</h1>
+            <h1 className="text-xl font-bold text-blue-600 tracking-tight">{t('nav.appTitle')}</h1>
           </div>
           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider ml-11">IRP Assistant</p>
         </div>

@@ -16,6 +16,7 @@ import { ProductOps } from './pages/ProductOps';
 import { JiraSync } from './pages/JiraSync';
 import { SchedulingProvider } from '../context/SchedulingContext';
 import { DashboardProvider } from '../context/DashboardContext';
+import { I18nProvider } from '../context/I18nContext';
 import '../index.css';
 
 const container = document.getElementById('root');
@@ -23,29 +24,31 @@ if (container) {
   const root = createRoot(container);
   root.render(
     <StrictMode>
-      <SchedulingProvider>
-        <DashboardProvider>
-          <HashRouter>
-            <Routes>
-              <Route path="/" element={<Layout />}>
-                <Route index element={<DashboardOverview />} />
-                <Route path="team-capacity" element={<TeamCapacity />} />
-                <Route path="project-results" element={<ProjectResults />} />
-                <Route path="schedule-details" element={<ScheduleDetails />} />
-                
-                <Route path="projects" element={<Projects />} />
-                <Route path="jira-sync" element={<JiraSync />} />
-                <Route path="resources" element={<Resources />} />
-                <Route path="scrum" element={<ScrumTeams />} />
-                <Route path="skills" element={<Skills />} />
-                <Route path="product-ops" element={<ProductOps />} />
-                <Route path="holidays" element={<Holidays />} />
-                <Route path="settings" element={<Settings />} />
-              </Route>
-            </Routes>
-          </HashRouter>
-        </DashboardProvider>
-      </SchedulingProvider>
+      <I18nProvider>
+        <SchedulingProvider>
+          <DashboardProvider>
+            <HashRouter>
+              <Routes>
+                <Route path="/" element={<Layout />}>
+                  <Route index element={<DashboardOverview />} />
+                  <Route path="team-capacity" element={<TeamCapacity />} />
+                  <Route path="project-results" element={<ProjectResults />} />
+                  <Route path="schedule-details" element={<ScheduleDetails />} />
+                  
+                  <Route path="projects" element={<Projects />} />
+                  <Route path="jira-sync" element={<JiraSync />} />
+                  <Route path="resources" element={<Resources />} />
+                  <Route path="scrum" element={<ScrumTeams />} />
+                  <Route path="skills" element={<Skills />} />
+                  <Route path="product-ops" element={<ProductOps />} />
+                  <Route path="holidays" element={<Holidays />} />
+                  <Route path="settings" element={<Settings />} />
+                </Route>
+              </Routes>
+            </HashRouter>
+          </DashboardProvider>
+        </SchedulingProvider>
+      </I18nProvider>
     </StrictMode>
   );
 }

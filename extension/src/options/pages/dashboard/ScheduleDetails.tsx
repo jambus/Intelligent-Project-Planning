@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useDashboard } from '../../../context/DashboardContext';
+import { useTranslation } from '../../../context/I18nContext';
 import { calculateWeeklyMD } from '../../../utils/dateUtils';
 import { User, Briefcase } from 'lucide-react';
 
@@ -8,6 +9,7 @@ export const ScheduleDetails = () => {
     displayWeeks, displayWeeksGrouped, workingDaySet,
     allocations, projects, resources, operations
   } = useDashboard();
+  const { t } = useTranslation();
 
   const [groupMode, setGroupMode] = useState<'resource' | 'project'>('resource');
 
@@ -15,26 +17,26 @@ export const ScheduleDetails = () => {
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">排期明细矩阵</h2>
-          <p className="text-xs font-bold text-gray-400 mt-1.5">细化到周的人力资源分配详情</p>
+          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{t('dashboard.scheduleDetailsTitle')}</h2>
+          <p className="text-xs font-bold text-gray-400 mt-1.5">{t('dashboard.scheduleDetailsDesc')}</p>
         </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-[calc(100vh-160px)]">
         <div className="p-4 border-b border-gray-100 bg-gray-50/30 flex justify-between items-center">
-          <h3 className="font-bold text-gray-900 text-sm">按时间展开的排期明细表</h3>
+          <h3 className="font-bold text-gray-900 text-sm">{t('dashboard.matrixTitle')}</h3>
           <div className="flex bg-gray-100 p-1 rounded-xl">
             <button 
               onClick={() => setGroupMode('resource')} 
               className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${groupMode === 'resource' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
             >
-              <User size={14} /><span>按人员分组</span>
+              <User size={14} /><span>{t('dashboard.groupByResource')}</span>
             </button>
             <button 
               onClick={() => setGroupMode('project')} 
               className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${groupMode === 'project' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
             >
-              <Briefcase size={14} /><span>按项目分组</span>
+              <Briefcase size={14} /><span>{t('dashboard.groupByProject')}</span>
             </button>
           </div>
         </div>
@@ -42,18 +44,18 @@ export const ScheduleDetails = () => {
         <div className="flex-1 overflow-auto p-0">
           {!allocations || allocations.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <p className="text-gray-400 text-sm font-medium italic">当前时间范围内暂无排期数据，请回「全局概览」调整时间或执行排期</p>
+              <p className="text-gray-400 text-sm font-medium italic">{t('dashboard.noScheduleData')}</p>
             </div>
           ) : (
             <table className="w-full text-left border-collapse text-xs relative">
               <thead className="sticky top-0 z-10 shadow-sm">
                 <tr className="border-b border-gray-200 text-gray-400 font-black uppercase tracking-widest bg-gray-50">
-                  <th rowSpan={2} className="p-4 min-w-[150px] sticky left-0 z-20 bg-gray-50 border-r border-gray-200">{groupMode === 'resource' ? '研发资源' : '承接项目'}</th>
-                  <th rowSpan={2} className="p-4 min-w-[200px] sticky left-[150px] z-20 bg-gray-50 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">{groupMode === 'resource' ? '承接项目' : '参与人员'}</th>
-                  <th rowSpan={2} className="p-4 text-center bg-gray-50">投入比</th>
+                  <th rowSpan={2} className="p-4 min-w-[150px] sticky left-0 z-20 bg-gray-50 border-r border-gray-200">{groupMode === 'resource' ? t('dashboard.colResource') : t('dashboard.colProject')}</th>
+                  <th rowSpan={2} className="p-4 min-w-[200px] sticky left-[150px] z-20 bg-gray-50 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">{groupMode === 'resource' ? t('dashboard.colProject') : t('dashboard.colParticipant')}</th>
+                  <th rowSpan={2} className="p-4 text-center bg-gray-50">{t('dashboard.colRatio')}</th>
                   {displayWeeksGrouped.map((g, idx) => (
                     <th key={idx} colSpan={g.span} className="py-2 text-center border-l border-gray-200 text-gray-500 bg-gray-100">
-                      {g.month} 月
+                      {g.month}{t('dashboard.monthAbbr')}
                     </th>
                   ))}
                 </tr>
@@ -81,17 +83,17 @@ export const ScheduleDetails = () => {
                     const opId = isOp ? -Number(alloc.projectId) - 1000000 : null;
                     const operation = isOp ? operations.find(o => Number(o.id) === opId) : null;
                     const project = isOp ? null : projects.find(p => Number(p.id) === Number(alloc.projectId));
-                    const projName = isOp ? `[运维] ${operation?.productName || 'Unknown'}` : (project?.name || 'Unknown');
+                    const projName = isOp ? `${t('dashboard.opPrefix')}${operation?.productName || t('dashboard.unknownProject')}` : (project?.name || t('dashboard.unknownProject'));
                     
                     const minStart = group.map(a => a.startDate).sort()[0];
                     const maxEnd = group.map(a => a.endDate).sort().reverse()[0];
                     const percs = Array.from(new Set(group.map(a => a.allocationPercentage)));
-                    const percStr = percs.length === 1 ? `${percs[0]}%` : 'Mixed';
+                    const percStr = percs.length === 1 ? `${percs[0]}%` : t('dashboard.mixedRatio');
 
                     return (
                       <tr key={`${alloc.resourceId}_${alloc.projectId}`} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
                         <td className="p-4 sticky left-0 z-10 bg-white border-r border-gray-100 group-hover:bg-blue-50/30 transition-colors">
-                          <div className="font-black text-gray-900">{resource?.name || 'Unknown'}</div>
+                          <div className="font-black text-gray-900">{resource?.name || t('dashboard.unknownResource')}</div>
                           <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">{resource?.role}</div>
                         </td>
                         <td className="p-4 sticky left-[150px] z-10 bg-white border-r border-gray-100 group-hover:bg-blue-50/30 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
@@ -127,7 +129,7 @@ export const ScheduleDetails = () => {
                       const alloc = group[0];
                       const resource = resources.find(r => Number(r.id) === Number(alloc.resourceId));
                       const percs = Array.from(new Set(group.map(a => a.allocationPercentage)));
-                      const percStr = percs.length === 1 ? `${percs[0]}%` : 'Mixed';
+                      const percStr = percs.length === 1 ? `${percs[0]}%` : t('dashboard.mixedRatio');
                       
                       return (
                         <tr key={`${p.id}_${alloc.resourceId}`} className={`border-b border-gray-100 hover:bg-indigo-50/30 transition-colors ${idx === 0 ? 'border-t-2 border-t-gray-100' : ''}`}>
@@ -135,7 +137,7 @@ export const ScheduleDetails = () => {
                             {idx === 0 && <div className="font-black text-indigo-700 leading-tight">{p.name}</div>}
                           </td>
                           <td className="p-4 sticky left-[150px] z-10 bg-white border-r border-gray-100 group-hover:bg-indigo-50/30 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                            <div className="font-bold text-gray-900">{resource?.name || 'Unknown'}</div>
+                            <div className="font-bold text-gray-900">{resource?.name || t('dashboard.unknownResource')}</div>
                             <div className="text-[9px] text-gray-400 font-bold uppercase">{resource?.role}</div>
                           </td>
                           <td className="p-4 text-center bg-white group-hover:bg-indigo-50/30 transition-colors">
@@ -167,15 +169,15 @@ export const ScheduleDetails = () => {
                       const alloc = group[0];
                       const resource = resources.find(r => Number(r.id) === Number(alloc.resourceId));
                       const percs = Array.from(new Set(group.map(a => a.allocationPercentage)));
-                      const percStr = percs.length === 1 ? `${percs[0]}%` : 'Mixed';
+                      const percStr = percs.length === 1 ? `${percs[0]}%` : t('dashboard.mixedRatio');
                       
                       return (
                         <tr key={`${op.id}_${alloc.resourceId}`} className={`border-b border-gray-100 hover:bg-indigo-50/30 transition-colors ${idx === 0 ? 'border-t-2 border-t-gray-100' : ''}`}>
                           <td className="p-4 sticky left-0 z-10 bg-white border-r border-gray-100 group-hover:bg-indigo-50/30 transition-colors">
-                            {idx === 0 && <div className="font-black text-indigo-700 leading-tight">[运维] {op.productName}</div>}
+                            {idx === 0 && <div className="font-black text-indigo-700 leading-tight">{t('dashboard.opPrefix')}{op.productName}</div>}
                           </td>
                           <td className="p-4 sticky left-[150px] z-10 bg-white border-r border-gray-100 group-hover:bg-indigo-50/30 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                            <div className="font-bold text-gray-900">{resource?.name || 'Unknown'}</div>
+                            <div className="font-bold text-gray-900">{resource?.name || t('dashboard.unknownResource')}</div>
                             <div className="text-[9px] text-gray-400 font-bold uppercase">{resource?.role}</div>
                           </td>
                           <td className="p-4 text-center bg-white group-hover:bg-indigo-50/30 transition-colors">

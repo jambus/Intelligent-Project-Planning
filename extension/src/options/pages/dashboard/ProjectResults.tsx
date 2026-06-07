@@ -1,19 +1,21 @@
 import { useState } from 'react';
 import { useDashboard } from '../../../context/DashboardContext';
+import { useTranslation } from '../../../context/I18nContext';
 import { FolderKanban, Search, AlertTriangle, XCircle, CheckCircle2 } from 'lucide-react';
 
 export const ProjectResults = () => {
   const { 
     readyProjects, pendingProjects, fullyScheduledProjects, partiallyScheduledProjects, unscheduledProjects 
   } = useDashboard();
+  const { t } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'fully'>('pending');
 
   const getStatusBadge = (p: any) => {
-    if (p.devTotalMd === 0 && p.testTotalMd === 0) return <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold text-[10px]">待评估</span>;
-    if (p.isFullyScheduled) return <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold text-[10px]">已排满</span>;
-    if (p.hasAllocations) return <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold text-[10px]">部分排上</span>;
-    return <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold text-[10px]">排不上</span>;
+    if (p.devTotalMd === 0 && p.testTotalMd === 0) return <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold text-[10px]">{t('dashboard.statusPendingAssessment')}</span>;
+    if (p.isFullyScheduled) return <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold text-[10px]">{t('dashboard.statusFullyScheduled')}</span>;
+    if (p.hasAllocations) return <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold text-[10px]">{t('dashboard.statusPartiallyScheduled')}</span>;
+    return <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold text-[10px]">{t('dashboard.statusUnscheduled')}</span>;
   };
 
   const renderProjectTable = (projects: any[], emptyMessage: string) => (
@@ -21,13 +23,13 @@ export const ProjectResults = () => {
       <table className="w-full text-left border-collapse text-xs">
         <thead>
           <tr className="border-b border-gray-100 text-gray-400 font-black uppercase tracking-tighter bg-gray-50/20">
-            <th className="p-4 w-12 text-center">ID</th>
-            <th className="p-4">项目名称</th>
-            <th className="p-4 text-center">状态</th>
-            <th className="p-4 text-center">开发 (总/缺口)</th>
-            <th className="p-4 text-center">测试 (总/缺口)</th>
-            <th className="p-4">负责人员</th>
-            <th className="p-4">备注/未排上原因</th>
+            <th className="p-4 w-12 text-center">{t('dashboard.tableId')}</th>
+            <th className="p-4">{t('dashboard.tableProjectName')}</th>
+            <th className="p-4 text-center">{t('dashboard.tableStatus')}</th>
+            <th className="p-4 text-center">{t('dashboard.tableDevReq')}</th>
+            <th className="p-4 text-center">{t('dashboard.tableTestReq')}</th>
+            <th className="p-4">{t('dashboard.tableAssignee')}</th>
+            <th className="p-4">{t('dashboard.tableReason')}</th>
           </tr>
         </thead>
         <tbody>
@@ -66,7 +68,7 @@ export const ProjectResults = () => {
                   <td className="p-4 text-[10px] text-gray-600 leading-relaxed max-w-xs">
                     {p.assignedDevs && <div><span className="font-bold text-gray-400">Dev:</span> {p.assignedDevs}</div>}
                     {p.assignedTesters && <div><span className="font-bold text-gray-400">QA:</span> {p.assignedTesters}</div>}
-                    {!p.assignedDevs && !p.assignedTesters && <span className="text-gray-300 italic">未分配</span>}
+                    {!p.assignedDevs && !p.assignedTesters && <span className="text-gray-300 italic">{t('dashboard.notAssigned')}</span>}
                   </td>
                   <td className="p-4 text-[10px] text-red-500 font-bold">
                     {p.unscheduledReason || '-'}
@@ -84,8 +86,8 @@ export const ProjectResults = () => {
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">项目排期结果</h2>
-          <p className="text-xs font-bold text-gray-400 mt-1.5">分类查看所有项目的排期状态与资源缺口</p>
+          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{t('dashboard.projectResultsTitle')}</h2>
+          <p className="text-xs font-bold text-gray-400 mt-1.5">{t('dashboard.projectResultsDesc')}</p>
         </div>
       </div>
 
@@ -99,7 +101,7 @@ export const ProjectResults = () => {
             }`}
           >
             <AlertTriangle size={16} />
-            <span>待处理事项</span>
+            <span>{t('dashboard.tabPending')}</span>
             <span className="ml-2 bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full text-[10px]">
               {unscheduledProjects.length + partiallyScheduledProjects.length + pendingProjects.length}
             </span>
@@ -113,7 +115,7 @@ export const ProjectResults = () => {
             }`}
           >
             <FolderKanban size={16} />
-            <span>全部项目</span>
+            <span>{t('dashboard.tabAll')}</span>
             <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-[10px]">
               {readyProjects.length}
             </span>
@@ -127,7 +129,7 @@ export const ProjectResults = () => {
             }`}
           >
             <CheckCircle2 size={16} />
-            <span>已排满项目</span>
+            <span>{t('dashboard.tabFully')}</span>
             <span className="ml-2 bg-green-100 text-green-600 px-2 py-0.5 rounded-full text-[10px]">
               {fullyScheduledProjects.length}
             </span>
@@ -143,40 +145,40 @@ export const ProjectResults = () => {
               <div className="p-0">
                 <div className="px-4 py-3 bg-red-50/50 flex items-center space-x-2">
                   <XCircle size={16} className="text-red-500" />
-                  <h3 className="font-bold text-red-900 text-sm">排不上项目 ({unscheduledProjects.length})</h3>
+                  <h3 className="font-bold text-red-900 text-sm">{t('dashboard.unscheduledProjectsTitle')} ({unscheduledProjects.length})</h3>
                 </div>
-                {renderProjectTable(unscheduledProjects, "太棒了，没有完全排不上的项目！")}
+                {renderProjectTable(unscheduledProjects, t('dashboard.msgNoUnscheduled'))}
               </div>
 
               {/* Partially Scheduled */}
               <div className="p-0">
                 <div className="px-4 py-3 bg-blue-50/50 flex items-center space-x-2">
                   <AlertTriangle size={16} className="text-blue-500" />
-                  <h3 className="font-bold text-blue-900 text-sm">部分排上项目 ({partiallyScheduledProjects.length})</h3>
+                  <h3 className="font-bold text-blue-900 text-sm">{t('dashboard.partiallyScheduledProjectsTitle')} ({partiallyScheduledProjects.length})</h3>
                 </div>
-                {renderProjectTable(partiallyScheduledProjects, "太棒了，所有能排上的项目都已排满！")}
+                {renderProjectTable(partiallyScheduledProjects, t('dashboard.msgNoPartially'))}
               </div>
 
               {/* Pending Assessment */}
               <div className="p-0">
                 <div className="px-4 py-3 bg-orange-50/50 flex items-center space-x-2">
                   <Search size={16} className="text-orange-500" />
-                  <h3 className="font-bold text-orange-900 text-sm">待评估项目 ({pendingProjects.length})</h3>
+                  <h3 className="font-bold text-orange-900 text-sm">{t('dashboard.pendingAssessmentProjectsTitle')} ({pendingProjects.length})</h3>
                 </div>
-                {renderProjectTable(pendingProjects, "太棒了，没有需要补充工时评估的项目！")}
+                {renderProjectTable(pendingProjects, t('dashboard.msgNoPending'))}
               </div>
             </div>
           )}
 
           {activeTab === 'all' && (
             <div>
-              {renderProjectTable(readyProjects, "暂无项目数据")}
+              {renderProjectTable(readyProjects, t('dashboard.msgNoData'))}
             </div>
           )}
 
           {activeTab === 'fully' && (
             <div>
-              {renderProjectTable(fullyScheduledProjects, "目前还没有完全排满的项目")}
+              {renderProjectTable(fullyScheduledProjects, t('dashboard.msgNoFully'))}
             </div>
           )}
         </div>

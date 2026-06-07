@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { getStorageItem, setStorageItem } from '../../utils/storage';
-import { Save, RotateCcw } from 'lucide-react';
+import { Save, RotateCcw, Globe } from 'lucide-react';
 import { DEFAULT_SCHEDULING_PROMPT, DEFAULT_STRATEGY_FOCUSED, DEFAULT_STRATEGY_BALANCED, DEFAULT_STRATEGY_URGENT } from '../../services/ai';
+import { useTranslation } from '../../context/I18nContext';
 
 export const Settings = () => {
+  const { t, lang, setLang } = useTranslation();
   const [jiraDomain, setJiraDomain] = useState('');
   const [jiraProjects, setJiraProjects] = useState('');
   const [jiraHoursPerDay, setJiraHoursPerDay] = useState(6);
@@ -92,8 +94,8 @@ export const Settings = () => {
     <div className="max-w-3xl mx-auto space-y-8 pb-20">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">系统设置</h2>
-          <p className="text-gray-500 mt-1">配置第三方 API 密钥与核心排期策略</p>
+          <h2 className="text-2xl font-bold text-gray-900">{t('settings.title')}</h2>
+          <p className="text-gray-500 mt-1">{t('settings.description')}</p>
         </div>
         {message && (
           <div className={`px-4 py-2 rounded shadow-sm text-sm ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -105,6 +107,27 @@ export const Settings = () => {
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-8">
         
         <form onSubmit={handleSave} className="space-y-8">
+          {/* Language Section */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 border-b pb-2 mb-4 flex items-center space-x-2">
+              <Globe size={18} className="text-blue-500" />
+              <span>{t('settings.language')}</span>
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.languageDesc')}</label>
+                <select 
+                  className="w-full md:w-1/3 p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  value={lang}
+                  onChange={(e) => setLang(e.target.value as 'zh' | 'en')}
+                >
+                  <option value="zh">简体中文</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           {/* Jira Section */}
           <div>
             <h3 className="text-lg font-medium text-gray-900 border-b pb-2 mb-4">Jira 配置 (用于页面悬浮注入)</h3>

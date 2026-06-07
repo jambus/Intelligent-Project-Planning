@@ -261,3 +261,9 @@ graph TD
 7. **数据安全与级联一致性 (Data Safety & Cascade Consistency)**：项目与人员的文件导入本质为「清空并覆盖」操作，导入前若已有数据会弹出二次确认（提示不可撤销）；同时 `deleteResource`/`deleteProject` 在删除主记录前级联清理其关联的 `allocations`，杜绝指向已删除实体的孤儿排期记录。
 
 8. **可配置 Jira Epic Link 字段 (Configurable Epic Link Field)**：考虑到不同 Jira 实例的 Epic Link 自定义字段 ID 并不一致，系统在「系统设置」中新增「Epic Link 自定义字段 ID」配置项（默认 `10014`），`syncEpicLoggedHours` 据此动态拼接 `cf[xxxxx]` 与 `customfield_xxxxx`。此外 Jira 同步过程新增逐项目进度展示与按 Epic 维度的缺失工时错误汇总，提升大批量同步的可观测性。
+
+#### 3.3.14 中英双语国际化 (I18n Localization)
+为满足跨国跨地区团队的协作需求，系统引入了完备的界面国际化能力：
+1. **轻量化架构 (Lightweight Architecture)**：采用基于 React Context 的原生 `I18nProvider`，避免引入外部重量级依赖（如 i18next），保持插件的高性能与低体积。
+2. **全界面双语覆盖 (Full UI Coverage)**：侧边栏菜单、设置页以及全部 4 个排期大盘子页面（全局概览、团队容量、项目排期结果、排期明细矩阵）的文案、表头、按钮及错误提示等全部支持中/英文无缝切换，实现业务数据之外的界面层完全本地化。
+3. **状态持久化 (State Persistence)**：系统设置中提供语言切换器，支持“系统默认 / 简体中文 / English”。用户设定的语言偏好会实时同步并持久化存储在 `chrome.storage.local` 中。
