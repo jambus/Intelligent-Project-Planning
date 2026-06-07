@@ -247,7 +247,8 @@ export const calculateWeeklyMD = (
   allocationEnd: string,
   percentage: number,
   weekYear: number,
-  weekNumber: number
+  weekNumber: number,
+  workingDaySet?: Set<string>
 ): number => {
   const start = new Date(allocationStart);
   const end = new Date(allocationEnd);
@@ -265,7 +266,7 @@ export const calculateWeeklyMD = (
   
   if (overlapStart > overlapEnd) return 0;
   
-  const workingDays = getWorkingDays(overlapStart, overlapEnd);
+  const workingDays = getWorkingDays(overlapStart, overlapEnd, workingDaySet);
   return (workingDays * percentage) / 100;
 };
 

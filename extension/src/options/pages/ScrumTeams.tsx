@@ -40,6 +40,13 @@ export const ScrumTeams = () => {
       for (const r of teamResources) {
         await db.resources.update(r.id!, { scrumTeamId: undefined });
       }
+
+      // Clear scrumTeamId from projects and reset teamSchedulingMode
+      const teamProjects = await db.projects.filter(p => p.scrumTeamId === id).toArray();
+      for (const p of teamProjects) {
+        await db.projects.update(p.id!, { scrumTeamId: undefined, teamSchedulingMode: 'all-in' });
+      }
+
       await db.scrumTeams.delete(id);
       if (selectedTeamId === id) {
         setSelectedTeamId(null);

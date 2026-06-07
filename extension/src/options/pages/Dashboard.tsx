@@ -148,7 +148,7 @@ export const Dashboard = ({ view = 'all' }: { view?: 'all' | 'scheduled' | 'allo
   // dashboard never drifts from the scheduling engine; idle is computed against
   // the currently displayed week range for the grid.
   const runAuditForUI = (currentProjects: any[], currentResources: any[], currentAllocations: any[], currentScrumTeams: any[], currentWorkingDaySet: Set<string>) => {
-    const gaps = computeProjectGaps(currentProjects, currentResources, currentAllocations)
+    const gaps = computeProjectGaps(currentProjects, currentResources, currentAllocations, currentWorkingDaySet)
       .filter(p => Math.ceil(p.devGap) >= 1 || Math.ceil(p.testGap) >= 1);
 
     const idle = currentResources.map(r => {
@@ -156,7 +156,7 @@ export const Dashboard = ({ view = 'all' }: { view?: 'all' | 'scheduled' | 'allo
       let totalAllocatedMdInRange = 0;
       displayWeeks.forEach(w => {
         rAllocations.forEach(a => {
-          totalAllocatedMdInRange += calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week);
+          totalAllocatedMdInRange += calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week, currentWorkingDaySet);
         });
       });
 
@@ -231,7 +231,7 @@ export const Dashboard = ({ view = 'all' }: { view?: 'all' | 'scheduled' | 'allo
     const ready = projects.filter(p => p.devTotalMd > 0 || p.testTotalMd > 0);
     
     const gapById = new Map(
-      computeProjectGaps(ready, resources, allocations).map(g => [Number(g.id), g])
+      computeProjectGaps(ready, resources, allocations, workingDaySet).map(g => [Number(g.id), g])
     );
 
     let globalDevIdle = 0;
@@ -611,7 +611,7 @@ export const Dashboard = ({ view = 'all' }: { view?: 'all' | 'scheduled' | 'allo
                         <td className="p-4"><div className="text-blue-600 font-black leading-tight">{projName}</div><div className="text-[10px] text-gray-400 mt-1 font-medium">{minStart} ~ {maxEnd}</div></td>
                         <td className="p-4 text-center"><span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[9px] font-black border border-green-100">{percStr}</span></td>
                         {displayWeeks.map(w => {
-                          const md = group.reduce((sum, a) => sum + Math.round(calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week)), 0);
+                          const md = group.reduce((sum, a) => sum + Math.round(calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week, workingDaySet)), 0);
                           return <td key={`${w.year}-${w.week}`} className={`p-4 text-center font-mono font-black border-l border-gray-50/50 ${md > 0 ? 'text-gray-900 bg-blue-50/10' : 'text-gray-200'}`}>{md > 0 ? md : '-'}</td>;
                         })}
                       </tr>
@@ -638,7 +638,7 @@ export const Dashboard = ({ view = 'all' }: { view?: 'all' | 'scheduled' | 'allo
                           <td className="p-4"><div className="font-bold text-gray-900">{resource?.name || 'Unknown'}</div><div className="text-[9px] text-gray-400 font-bold uppercase">{resource?.role}</div></td>
                           <td className="p-4 text-center"><span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[9px] font-black border border-green-100">{percStr}</span></td>
                           {displayWeeks.map(w => {
-                            const md = group.reduce((sum, a) => sum + Math.round(calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week)), 0);
+                            const md = group.reduce((sum, a) => sum + Math.round(calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week, workingDaySet)), 0);
                             return <td key={`${w.year}-${w.week}`} className={`p-4 text-center font-mono font-black border-l border-gray-50/50 ${md > 0 ? 'text-gray-900 bg-blue-50/10' : 'text-gray-200'}`}>{md > 0 ? md : '-'}</td>;
                           })}
                         </tr>
@@ -665,7 +665,7 @@ export const Dashboard = ({ view = 'all' }: { view?: 'all' | 'scheduled' | 'allo
                           <td className="p-4"><div className="font-bold text-gray-900">{resource?.name || 'Unknown'}</div><div className="text-[9px] text-gray-400 font-bold uppercase">{resource?.role}</div></td>
                           <td className="p-4 text-center"><span className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded-md text-[9px] font-black border border-green-100">{percStr}</span></td>
                           {displayWeeks.map(w => {
-                            const md = group.reduce((sum, a) => sum + Math.round(calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week)), 0);
+                            const md = group.reduce((sum, a) => sum + Math.round(calculateWeeklyMD(a.startDate, a.endDate, a.allocationPercentage, w.year, w.week, workingDaySet)), 0);
                             return <td key={`${w.year}-${w.week}`} className={`p-4 text-center font-mono font-black border-l border-gray-50/50 ${md > 0 ? 'text-gray-900 bg-blue-50/10' : 'text-gray-200'}`}>{md > 0 ? md : '-'}</td>;
                           })}
                         </tr>

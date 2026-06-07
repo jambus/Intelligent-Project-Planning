@@ -158,7 +158,7 @@ export const Projects = () => {
                     <select
                       value={p.schedulingStrategy || 'focused'}
                       onChange={(e) => {
-                        db.projects.update(p.id!, { schedulingStrategy: e.target.value as any });
+                        db.projects.update(p.id!, { schedulingStrategy: e.target.value as any, rejectionReason: '' });
                       }}
                       className="appearance-none py-1 px-2 text-xs font-bold text-gray-600 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-white w-24 hover:border-gray-300"
                     >
@@ -175,7 +175,8 @@ export const Projects = () => {
                           const val = e.target.value ? Number(e.target.value) : undefined;
                           db.projects.update(p.id!, { 
                             scrumTeamId: val,
-                            teamSchedulingMode: val ? (p.teamSchedulingMode || 'cross-team') : 'all-in'
+                            teamSchedulingMode: val ? (p.teamSchedulingMode || 'cross-team') : 'all-in',
+                            rejectionReason: ''
                           });
                         }}
                         className="appearance-none py-1 px-2 text-xs font-bold text-gray-600 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-white w-28 hover:border-gray-300"
@@ -188,7 +189,7 @@ export const Projects = () => {
                       <select
                         value={p.teamSchedulingMode || 'all-in'}
                         onChange={(e) => {
-                          db.projects.update(p.id!, { teamSchedulingMode: e.target.value as any });
+                          db.projects.update(p.id!, { teamSchedulingMode: e.target.value as any, rejectionReason: '' });
                         }}
                         className="appearance-none py-1 px-2 text-[10px] text-gray-500 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-gray-50 w-28 hover:border-gray-300"
                         disabled={!p.scrumTeamId}

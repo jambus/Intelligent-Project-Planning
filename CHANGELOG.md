@@ -2,8 +2,16 @@
 
 ## [1.0.7] - 2026-06-05
 
-### 待开发 (Upcoming)
-- 版本 1.0.7 初始化开发。
+### 优化与修复 (Improvements & Fixes)
+- **排期引擎状态同步与跨边界约束 (State Sync & Boundaries)**：
+  - 重构 `applySuggestions` 参数传递，通过显式下传 `isLatePass` 取代读取异步的 `currentStep` 状态。修复了 `cross-team`（跨队借人）模式在最后排期阶段偶尔不生效的问题。
+  - 在大模型请求 (`suggestAllocationsForBatch`) 前置了严格的候选池裁剪。系统会根据当前批次项目的 `allowedResourceIds` (Scrum 约束) 过滤闲置人员，AI 只会看到合法范围内的候选人。大幅降低大模型 Token 消耗，彻底消灭 AI 瞎编和幻觉推荐。
+  - 修复 `focused`（专注模式）的跨次重排漏洞，结合历史分配记录和跨 Pass 的 Set 控制，防止对同一专注项目重复指派多名人员。
+- **大盘一致性与节假日扣减 (Dashboard & Holiday Sync)**：
+  - 排期大盘的 `gap` 缺口计算和 `calculateWeeklyMD`（每周折算工时）全面引入当前 `workingDaySet`。彻底解决“已排满 / 部分排满”状态评估，以及周维度投入工时计算因节假日口径不一致导致的 UI 展示错误。
+- **项目与团队配置连动联动 (Team Config Cascade)**：
+  - 级联删除优化：在「Scrum 管理」解散团队时，系统不仅清理人员归属，还会将对应项目的 `scrumTeamId` 设为空，并强制降级调度模式为 `all-in`（全局统筹），防止项目因找不到废弃团队的人员陷入排期死锁。
+  - 在「项目配置」页修改策略或 Scrum 约束条件时，系统会自动清空上一次遗留的 `rejectionReason`（排不上原因），避免大盘状态未更新产生视觉误导。
 
 ## [1.0.6] - 2026-06-05
 
