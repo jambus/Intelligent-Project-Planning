@@ -14,6 +14,79 @@ export const en = {
     productOps: 'Product Ops',
     holidays: 'Holidays',
     settings: 'Settings',
+    clearAllData: 'Clear All Data',
+    clearConfirm: 'Are you sure you want to delete all projects, resources, scheduling, and settings data? This action cannot be undone!',
+    clearSuccess: 'All data has been successfully cleared.'
+  },
+  common: {
+    add: 'Add',
+    edit: 'Edit',
+    delete: 'Delete',
+    save: 'Save',
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    downloadTemplate: 'Download Template',
+    import: 'Import',
+    importing: 'Importing...',
+    importSuccess: 'Import Success',
+    export: 'Export Data',
+    success: 'Success',
+    error: 'Error',
+    noData: 'No Data'
+  },
+  projects: {
+    title: 'Project Management',
+    desc: 'View project details to be scheduled (Strict priority based on CSV import order)',
+    downloadTemplate: 'Download Template (CSV)',
+    importBtn: 'Import Projects (CSV/Excel)',
+    importing: 'Importing...',
+    totalCount: 'Total {count} Projects',
+    noData: 'No project data. Please click the button above to import CSV/Excel.'
+  },
+  resources: {
+    title: 'Resource Management',
+    desc: 'Manage team members, roles, load capacity, and skill tags',
+    downloadTemplate: 'Download Template (CSV)',
+    importBtn: 'Import Resources (CSV/Excel)',
+    importing: 'Importing...',
+    exportBtn: 'Export Resources',
+    totalCount: 'Total {count} Members',
+    addBtn: 'Add Resource',
+    noData: 'No resource data. Please click the button above to import or add manually.'
+  },
+  scrum: {
+    title: 'Scrum Management',
+    desc: 'Manage cross-team Scrum organizational structure and developer allocation',
+    createTeam: 'Create Team',
+    addMember: 'Add Member',
+    removeMember: 'Remove',
+    saveTeam: 'Save Team',
+    editTeam: 'Edit Team',
+    deleteTeam: 'Delete Team'
+  },
+  skills: {
+    title: 'Skills Management',
+    desc: 'Manage global business and technical skill tags dictionary',
+    addSkill: 'Add Tag',
+    saveSkill: 'Save Tag'
+  },
+  productOps: {
+    title: 'Product Ops',
+    desc: 'Manage fixed monthly product ops mandays (Deducted automatically first)',
+    addOps: 'Add Ops',
+    saveChanges: 'Save Changes',
+    confirmAdd: 'Confirm Add'
+  },
+  holidays: {
+    title: 'Holidays & Workdays',
+    desc: 'Custom statutory holidays and make-up workdays for the scheduling engine (Needs annual maintenance)',
+    saveConfig: 'Save Calendar Config'
+  },
+  jiraSync: {
+    title: 'Jira Data Sync',
+    desc: 'Pull logged timespent of Epics and their subtasks from Jira for scheduling deduction',
+    syncSelected: 'Sync Selected ({count})',
+    syncing: 'Syncing...'
   },
   dashboard: {
     overviewTitle: 'Overview',

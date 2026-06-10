@@ -14,6 +14,79 @@ export const zh = {
     productOps: '运维管理',
     holidays: '节假日管理',
     settings: '系统设置',
+    clearAllData: '清除所有数据',
+    clearConfirm: '您确定要删除所有项目、人员、排期和设置数据吗？此操作不可撤销！',
+    clearSuccess: '所有数据已成功清除。'
+  },
+  common: {
+    add: '添加',
+    edit: '编辑',
+    delete: '删除',
+    save: '保存',
+    cancel: '取消',
+    confirm: '确认',
+    downloadTemplate: '下载模板',
+    import: '批量导入',
+    importing: '导入中...',
+    importSuccess: '导入成功',
+    export: '导出数据',
+    success: '成功',
+    error: '失败',
+    noData: '暂无数据'
+  },
+  projects: {
+    title: '项目管理',
+    desc: '查看待排期的项目详情（按 CSV 导入顺序执行严格优先级排期）',
+    downloadTemplate: '下载模板 (CSV)',
+    importBtn: '导入项目 (CSV/Excel)',
+    importing: '正在导入...',
+    totalCount: '共计 {count} 个项目',
+    noData: '暂无项目数据，请点击上方按钮导入 CSV/Excel 文件。'
+  },
+  resources: {
+    title: '人员管理',
+    desc: '管理团队成员、角色、负荷比例及技能标签',
+    downloadTemplate: '下载模板 (CSV)',
+    importBtn: '导入人员 (CSV/Excel)',
+    importing: '正在导入...',
+    exportBtn: '导出人员',
+    totalCount: '共计 {count} 位成员',
+    addBtn: '添加人员',
+    noData: '暂无人员数据，请点击上方按钮导入或手动添加。'
+  },
+  scrum: {
+    title: 'Scrum 管理',
+    desc: '管理跨团队的 Scrum 组织结构及研发人员分配',
+    createTeam: '创建团队',
+    addMember: '添加成员',
+    removeMember: '移出团队',
+    saveTeam: '保存团队',
+    editTeam: '编辑团队',
+    deleteTeam: '删除团队'
+  },
+  skills: {
+    title: '技能管理',
+    desc: '管理全局的业务与技术技能标签字典',
+    addSkill: '新增技能',
+    saveSkill: '保存技能'
+  },
+  productOps: {
+    title: '运维配置',
+    desc: '管理每月固定的产品运维排期人天（自动优先扣减）',
+    addOps: '添加运维产品',
+    saveChanges: '保存更改',
+    confirmAdd: '确认添加'
+  },
+  holidays: {
+    title: '节假日与工作日配置',
+    desc: '自定义排期引擎生效的法定节假日与调休日（每年需维护一次）',
+    saveConfig: '保存日历配置'
+  },
+  jiraSync: {
+    title: 'Jira 数据同步',
+    desc: '从 Jira 拉取 Epic 及其子任务已记录的实际工时 (Timespent)，用于排期抵扣',
+    syncSelected: '同步选中项目 ({count})',
+    syncing: '正在同步...'
   },
   dashboard: {
     overviewTitle: '全局概览',

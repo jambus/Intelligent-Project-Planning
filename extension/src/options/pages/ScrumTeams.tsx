@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { Plus, Users2, X, Save, Trash2, Edit2, UserPlus, UserMinus } from 'lucide-react';
+import { useTranslation } from '../../context/I18nContext';
 
 export const ScrumTeams = () => {
+  const { t } = useTranslation();
   const scrumTeams = useLiveQuery(() => db.scrumTeams.toArray());
   const allResources = useLiveQuery(() => db.resources.toArray());
   
@@ -90,8 +92,8 @@ export const ScrumTeams = () => {
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Scrum 团队管理</h2>
-          <p className="text-gray-500 mt-1">创建和维护 Scrum 团队，并分配开发与测试人员</p>
+          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{t('scrum.title')}</h2>
+          <p className="text-gray-500 mt-1">{t('scrum.desc')}</p>
         </div>
 
         <button 
@@ -99,7 +101,7 @@ export const ScrumTeams = () => {
           className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-blue-100 text-sm font-bold transition-all transform hover:-translate-y-0.5"
         >
           <Plus size={18} />
-          <span>创建团队</span>
+          <span>{t('scrum.createTeam')}</span>
         </button>
       </div>
 
@@ -138,14 +140,14 @@ export const ScrumTeams = () => {
                       <button 
                         onClick={(e) => { e.stopPropagation(); openEditTeam(team); }}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                        title="编辑团队"
+                        title={t('scrum.editTeam')}
                       >
                         <Edit2 size={14} />
                       </button>
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleDeleteTeam(team.id!); }}
                         className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                        title="删除团队"
+                        title={t('scrum.deleteTeam')}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -171,7 +173,7 @@ export const ScrumTeams = () => {
                   className="flex items-center space-x-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-4 py-2 rounded-xl font-bold text-sm transition-colors"
                 >
                   <UserPlus size={16} />
-                  <span>添加成员</span>
+                  <span>{t('scrum.addMember')}</span>
                 </button>
               </div>
 
@@ -205,7 +207,7 @@ export const ScrumTeams = () => {
                             <button
                               onClick={() => handleRemoveMember(m.id!)}
                               className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="移出团队"
+                              title={t('scrum.removeMember')}
                             >
                               <UserMinus size={16} />
                             </button>
@@ -232,7 +234,7 @@ export const ScrumTeams = () => {
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
           <div className="bg-white p-8 rounded-3xl shadow-2xl w-[400px] transform animate-in zoom-in-95 duration-200 border border-gray-100">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-gray-900">{editingTeamId ? '编辑团队' : '创建团队'}</h3>
+              <h3 className="text-xl font-black text-gray-900">{editingTeamId ? t('scrum.editTeam') : t('scrum.createTeam')}</h3>
               <button onClick={() => setShowTeamModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full">
                 <X size={20} />
               </button>
@@ -267,7 +269,7 @@ export const ScrumTeams = () => {
                   className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-2xl shadow-xl shadow-blue-100 font-bold transition-all active:scale-95"
                 >
                   <Save size={18} />
-                  <span>保存团队</span>
+                  <span>{t('scrum.saveTeam')}</span>
                 </button>
               </div>
             </form>
@@ -324,7 +326,7 @@ export const ScrumTeams = () => {
                               onClick={() => handleAddMember(r.id!)}
                               className="px-3 py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-lg font-bold text-xs transition-colors"
                             >
-                              添加
+                              {t('common.add')}
                             </button>
                           </td>
                         </tr>

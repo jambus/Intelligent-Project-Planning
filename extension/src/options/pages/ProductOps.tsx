@@ -5,8 +5,10 @@ import { Settings, Plus, Trash2, Edit2, Save, X, Download, Upload } from 'lucide
 import { addProductOperation, deleteProductOperation, updateProductOperation } from '../../db/services';
 import { importProductOperationsFromFile } from '../../services/fileImport';
 import { ErrorModal } from '../components/ErrorModal';
+import { useTranslation } from '../../context/I18nContext';
 
 export const ProductOps = () => {
+  const { t } = useTranslation();
   const operations = useLiveQuery(() => db.productOperations.toArray());
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -119,8 +121,8 @@ export const ProductOps = () => {
       />
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">产品运维管理</h2>
-          <p className="text-gray-500 mt-1">配置各产品每月的刚性运维人天，排期时将优先保障</p>
+          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{t('productOps.title')}</h2>
+          <p className="text-gray-500 mt-1">{t('productOps.desc')}</p>
         </div>
         
         <div className="flex items-center space-x-3">
@@ -139,7 +141,7 @@ export const ProductOps = () => {
             title="导出当前列表为 CSV"
           >
             <Download size={16} />
-            <span>导出数据</span>
+            <span>{t('common.export')}</span>
           </button>
 
           <button 
@@ -149,7 +151,7 @@ export const ProductOps = () => {
             title="批量导入 CSV/Excel"
           >
             <Upload size={16} />
-            <span>{isImporting ? '导入中...' : '批量导入'}</span>
+            <span>{isImporting ? t('common.importing') : t('common.import')}</span>
           </button>
           
           <button 
@@ -157,7 +159,7 @@ export const ProductOps = () => {
             className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-blue-100 text-sm font-bold transition-all"
           >
             <Plus size={18} />
-            <span>添加运维产品</span>
+            <span>{t('productOps.addOps')}</span>
           </button>
         </div>
       </div>
@@ -276,14 +278,14 @@ export const ProductOps = () => {
                   onClick={() => setShowModal(false)}
                   className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
                 >
-                  取消
+                  {t('common.cancel')}
                 </button>
                 <button 
                   type="submit"
                   className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center space-x-2 shadow-md shadow-blue-100"
                 >
                   <Save size={16} />
-                  <span>{editingId ? '保存更改' : '确认添加'}</span>
+                  <span>{editingId ? t('productOps.saveChanges') : t('productOps.confirmAdd')}</span>
                 </button>
               </div>
             </form>

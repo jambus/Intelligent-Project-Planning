@@ -18,7 +18,7 @@
   - **概览面板增强**：在全局概览页面，移除了原有的“最紧张的团队 Top 3”局部视图，直接升级为展示完整的“Scrum 团队容量 (当前选定时段)”看板，让全局负荷水位一目了然。
 - **中英双语国际化 (I18n Localization)**：
   - **无依赖轻量化设计**：实现了基于 React Context 的原生 `I18nProvider`，无需引入 `i18next` 等重量级第三方库，保持插件体积轻量。
-  - **全面覆盖界面元素**：将侧边栏菜单、系统设置以及被重构的四个全局大盘子页面 (`DashboardOverview`、`TeamCapacity`、`ProjectResults`、`ScheduleDetails`) 中的所有硬编码中文字符串提取为独立的 `zh.ts` 与 `en.ts` 词典文件。
+  - **全面覆盖界面元素**：将侧边栏菜单、系统设置、被重构的四个全局大盘子页面 (`DashboardOverview`、`TeamCapacity`、`ProjectResults`、`ScheduleDetails`) 以及所有其他管理页面（项目、人员、技能、Scrum 等）中的标题、描述、表头及**全部核心操作按钮**等硬编码中文字符串提取为独立的 `zh.ts` 与 `en.ts` 词典文件。
   - **实时切换与持久化**：在系统设置中新增了“界面语言”选项（支持自动/中文/English），切换即刻全局生效，并持久化保存至 `chrome.storage.local` 中。
 
 ## [1.0.6] - 2026-06-05

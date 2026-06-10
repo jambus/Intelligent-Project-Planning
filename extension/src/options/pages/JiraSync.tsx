@@ -4,8 +4,10 @@ import { db } from '../../db';
 import { syncEpicLoggedHours, type UnmatchedAuthor } from '../../services/jira';
 import { RefreshCcw, FileWarning, CheckSquare, Square, AlertCircle, Clock, UserPlus, X } from 'lucide-react';
 import { ErrorModal } from '../components/ErrorModal';
+import { useTranslation } from '../../context/I18nContext';
 
 export const JiraSync = () => {
+  const { t } = useTranslation();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<{title: string, message: string, details?: string} | null>(null);
   const [selectedProjects, setSelectedProjects] = useState<Set<number>>(new Set());
@@ -153,8 +155,8 @@ export const JiraSync = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Jira 管理</h1>
-          <p className="text-gray-500 text-sm mt-1">同步 Epic 已录入工时，系统排期时将自动扣减这些已发生工时。</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('jiraSync.title')}</h1>
+          <p className="text-gray-500 text-sm mt-1">{t('jiraSync.desc')}</p>
         </div>
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
@@ -187,7 +189,7 @@ export const JiraSync = () => {
             className="flex items-center space-x-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:bg-blue-300 disabled:cursor-not-allowed"
           >
             <RefreshCcw size={18} className={isSyncing ? "animate-spin" : ""} />
-            <span>{isSyncing ? '正在同步...' : `同步选中项目 (${selectedProjects.size})`}</span>
+            <span>{isSyncing ? t('jiraSync.syncing') : t('jiraSync.syncSelected').replace('{count}', selectedProjects.size.toString())}</span>
           </button>
         </div>
       </div>
