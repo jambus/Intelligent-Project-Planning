@@ -1,4 +1,4 @@
-import { db, type Resource, type Project, type Allocation } from './index';
+import { db, type Resource, type Project, type Allocation, type ProductOperation } from './index';
 
 // ========================
 // Resource Services
@@ -16,6 +16,9 @@ export const updateResource = async (id: number, changes: Partial<Resource>) => 
 };
 
 export const deleteResource = async (id: number) => {
+  // Cascade: remove allocations referencing this resource so the schedule
+  // doesn't keep orphaned records pointing at a deleted person.
+  await db.allocations.where('resourceId').equals(id).delete();
   return await db.resources.delete(id);
 };
 
@@ -35,6 +38,8 @@ export const updateProject = async (id: number, changes: Partial<Project>) => {
 };
 
 export const deleteProject = async (id: number) => {
+  // Cascade: remove allocations referencing this project.
+  await db.allocations.where('projectId').equals(id).delete();
   return await db.projects.delete(id);
 };
 
@@ -56,3 +61,23 @@ export const getAllocationsByProjectId = async (projectId: number) => {
 export const deleteAllocation = async (id: number) => {
   return await db.allocations.delete(id);
 };
+
+// ========================
+// Product Operation Services
+// ========================
+export const addProductOperation = async (operation: Omit<ProductOperation, 'id'>) => {
+  return await db.productOperations.add(operation);
+};
+
+export const getAllProductOperations = async () => {
+  return await db.productOperations.toArray();
+};
+
+export const updateProductOperation = async (id: number, changes: Partial<ProductOperation>) => {
+  return await db.productOperations.update(id, changes);
+};
+
+export const deleteProductOperation = async (id: number) => {
+  return await db.productOperations.delete(id);
+};
+

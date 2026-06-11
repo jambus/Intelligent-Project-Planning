@@ -3,11 +3,13 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { Calendar, Save, Plus, Trash2 } from 'lucide-react';
 import { updateHolidaysConfig, HOLIDAYS as defaultHolidays, SPECIAL_WORKDAYS as defaultSpecialWorkdays } from '../../utils/dateUtils';
+import { useTranslation } from '../../context/I18nContext';
 
 export const Holidays = () => {
+  const { t } = useTranslation();
   const settings = useLiveQuery(() => db.settings.toArray());
-  const [holidays, setHolidays] = useState<string[]>(defaultHolidays);
-  const [specialWorkdays, setSpecialWorkdays] = useState<string[]>(defaultSpecialWorkdays);
+  const [holidays, setHolidays] = useState<string[]>(Array.from(defaultHolidays));
+  const [specialWorkdays, setSpecialWorkdays] = useState<string[]>(Array.from(defaultSpecialWorkdays));
   const [newHoliday, setNewHoliday] = useState('');
   const [newSpecialWorkday, setNewSpecialWorkday] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -21,8 +23,8 @@ export const Holidays = () => {
       
       // Update the global configuration in dateUtils when settings are loaded
       updateHolidaysConfig(
-        hSetting ? hSetting.value : defaultHolidays,
-        swSetting ? swSetting.value : defaultSpecialWorkdays
+        hSetting ? hSetting.value : Array.from(defaultHolidays),
+        swSetting ? swSetting.value : Array.from(defaultSpecialWorkdays)
       );
     }
   }, [settings]);
@@ -68,8 +70,8 @@ export const Holidays = () => {
     <div className="space-y-6 max-w-4xl mx-auto pb-20">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">节假日与日历管理</h2>
-          <p className="text-gray-500 mt-1">配置法定节假日与调休工作日，确保 AI 排期时间准确</p>
+          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{t('holidays.title')}</h2>
+          <p className="text-gray-500 mt-1">{t('holidays.desc')}</p>
         </div>
         <button 
           onClick={handleSave}
@@ -77,7 +79,7 @@ export const Holidays = () => {
           className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-blue-100 text-sm font-bold transition-all disabled:opacity-50"
         >
           <Save size={18} />
-          <span>保存日历配置</span>
+          <span>{t('holidays.saveConfig')}</span>
         </button>
       </div>
 
@@ -101,7 +103,7 @@ export const Holidays = () => {
                 className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors flex items-center space-x-1"
               >
                 <Plus size={16} />
-                <span className="text-sm font-bold">添加</span>
+                <span className="text-sm font-bold">{t('common.add')}</span>
               </button>
             </div>
             
@@ -144,7 +146,7 @@ export const Holidays = () => {
                 className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-2 rounded-lg transition-colors flex items-center space-x-1"
               >
                 <Plus size={16} />
-                <span className="text-sm font-bold">添加</span>
+                <span className="text-sm font-bold">{t('common.add')}</span>
               </button>
             </div>
             

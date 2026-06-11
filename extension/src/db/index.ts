@@ -7,6 +7,14 @@ export interface Resource {
   capacity: number; // e.g., 100 (for 100%)
   skills: string[]; // JSON array of skill tags
   unavailableDates?: string[]; // Array of ISO dates when resource is on leave
+  jiraAliases?: string; // Optional Jira identities (accountId/email/display name), comma or newline separated, to reconcile name mismatches
+  scrumTeamId?: number; // Reference to a ScrumTeam
+}
+
+export interface ScrumTeam {
+  id?: number;
+  name: string;
+  description?: string;
 }
 
 export interface Project {
@@ -23,12 +31,24 @@ export interface Project {
   jiraEpicKey: string; // Jira Epic Key
   devTotalMd: number; // Dev Total MD (开发评估总天数)
   testTotalMd: number; // Test Total MD (测试评估总天数)
+  totalLoggedMd?: number; // Synced Total Logged MD from Jira (Total Consumed)
+  devLoggedMd?: number; // Synced Dev Logged MD from Jira
+  testLoggedMd?: number; // Synced Test Logged MD from Jira
+  lastJiraSyncAt?: number; // Timestamp of last successful Jira sync
+  jiraEpicStatus?: string; // Synced Epic status name from Jira
+  jiraStoryCount?: number; // # of Story children under the Epic
+  jiraTaskCount?: number;  // # of Task children under the Epic
+  jiraBugCount?: number;   // # of Bug children under the Epic
   projectTechLead?: string; // Project Tech Lead
   projectQualityLead?: string; // Project Quality Lead
   detailsProductDevMd?: string; // Details Product DEV MD
   detailsProductTestMd?: string; // Details Product Test MD
   techStack?: string; // Technical Stack required
   domain?: string; // Product Domain
+  schedulingStrategy?: 'balanced' | 'focused' | 'urgent'; // Strategy for AI allocation
+  scrumTeamId?: number; // Primary Scrum Team for the project
+  teamSchedulingMode?: 'team-first' | 'cross-team' | 'all-in'; // Constraint mode
+  rejectionReason?: string; // Reason why the project could not be fully scheduled
 }
 
 export interface Allocation {
@@ -61,6 +81,13 @@ export interface Skill {
   type: 'business' | 'technical';
 }
 
+export interface ProductOperation {
+  id?: number;
+  productName: string;
+  monthlyDevMd: number;
+  monthlyTestMd: number;
+}
+
 export class PlannerDatabase extends Dexie {
   resources!: Table<Resource, number>;
   projects!: Table<Project, number>;
@@ -68,6 +95,8 @@ export class PlannerDatabase extends Dexie {
   jiraWorklogs!: Table<JiraWorklog, number>;
   settings!: Table<Setting, string>;
   skills!: Table<Skill, number>;
+  productOperations!: Table<ProductOperation, number>;
+  scrumTeams!: Table<ScrumTeam, number>;
 
   constructor() {
     super('IntelligentResourcePlannerDB');
@@ -80,18 +109,83 @@ export class PlannerDatabase extends Dexie {
     });
     
     this.version(2).stores({
-      projects: '++id, name, status, priority, digitalResponsible' // Updated for Google Sheets
+      resources: '++id, name, role',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key'
     }).upgrade(tx => {
       // Clear old jira projects since schema fundamentally changed
       return tx.table('projects').clear();
     });
 
     this.version(3).stores({
-      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType'
+      resources: '++id, name, role',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key'
     });
 
     this.version(4).stores({
+      resources: '++id, name, role',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
       skills: '++id, name, type'
+    });
+
+    this.version(5).stores({
+      resources: '++id, name, role',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName'
+    });
+
+    this.version(6).stores({
+      resources: '++id, name, role',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName'
+    });
+
+    this.version(7).stores({
+      resources: '++id, name, role',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName'
+    });
+
+    this.version(8).stores({
+      resources: '++id, name, role, scrumTeamId',
+      projects: '++id, name, status, priority, digitalResponsible',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName',
+      scrumTeams: '++id, name'
+    });
+
+    this.version(9).stores({
+      resources: '++id, name, role, scrumTeamId',
+      projects: '++id, name, status, priority, digitalResponsible, scrumTeamId',
+      allocations: '++id, resourceId, projectId, startDate, endDate, allocationType',
+      jiraWorklogs: '++id, issueId, issueKey, authorAccountId',
+      settings: 'key',
+      skills: '++id, name, type',
+      productOperations: '++id, productName',
+      scrumTeams: '++id, name'
     });
   }
 }

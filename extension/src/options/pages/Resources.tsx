@@ -4,27 +4,34 @@ import { db } from '../../db';
 import { Trash2, Edit2, UserPlus, Save, X, Users, Upload, FileDown, CheckCircle2, Download } from 'lucide-react';
 import { addResource, deleteResource, updateResource } from '../../db/services';
 import { importResourcesFromFile } from '../../services/fileImport';
+import { ErrorModal } from '../components/ErrorModal';
+import { useTranslation } from '../../context/I18nContext';
 
 export const Resources = () => {
+  const { t } = useTranslation();
   const resources = useLiveQuery(() => db.resources.toArray());
   const allSkills = useLiveQuery(() => db.skills.toArray());
+  const scrumTeams = useLiveQuery(() => db.scrumTeams.toArray());
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importSuccess, setImportImportSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<{
     name: string;
     role: string;
     capacity: number;
     skills: string[];
+    jiraAliases: string;
   }>({ 
     name: '', 
     role: '前端工程师', 
     capacity: 100, 
-    skills: [] 
+    skills: [],
+    jiraAliases: ''
   });
 
   const roles = [
@@ -36,7 +43,7 @@ export const Resources = () => {
 
   const handleOpenAdd = () => {
     setEditingId(null);
-    setFormData({ name: '', role: '前端工程师', capacity: 100, skills: [] });
+    setFormData({ name: '', role: '前端工程师', capacity: 100, skills: [], jiraAliases: '' });
     setShowModal(true);
   };
 
@@ -46,7 +53,8 @@ export const Resources = () => {
       name: r.name, 
       role: r.role, 
       capacity: r.capacity, 
-      skills: r.skills || [] 
+      skills: r.skills || [],
+      jiraAliases: r.jiraAliases || ''
     });
     setShowModal(true);
   };
@@ -68,7 +76,8 @@ export const Resources = () => {
       name: formData.name,
       role: formData.role,
       capacity: Number(formData.capacity),
-      skills: formData.skills
+      skills: formData.skills,
+      jiraAliases: formData.jiraAliases.trim()
     };
 
     if (editingId) {
@@ -90,15 +99,24 @@ export const Resources = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Import REPLACES all existing resources (clear + bulkAdd). Warn first.
+    if ((resources?.length || 0) > 0) {
+      if (!window.confirm(`导入将清空并覆盖现有的 ${resources!.length} 名资源（不可撤销）。是否继续？`)) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    }
+
     setIsImporting(true);
+    setError(null);
     try {
       const count = await importResourcesFromFile(file);
       setImportImportSuccess(true);
       setTimeout(() => setImportImportSuccess(false), 3000);
       console.log(`Successfully imported ${count} resources.`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Import failed:', err);
-      alert('导入失败，请检查文件格式是否符合模板。');
+      setError(err.message);
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -115,15 +133,21 @@ export const Resources = () => {
   const exportToCSV = () => {
     if (!resources || resources.length === 0) return;
     
-    const headers = ['Name', 'Role', 'Capacity %', 'Skills'];
+    const headers = ['Name', 'Role', 'Capacity %', 'Skills', 'Jira Aliases', 'Scrum Team', 'Unavailable Dates'];
     const csvContent = [
       headers.join(','),
-      ...resources.map(r => [
-        `"${r.name}"`,
-        `"${r.role}"`,
-        r.capacity,
-        `"${r.skills.join(', ')}"`
-      ].join(','))
+      ...resources.map(r => {
+        const team = scrumTeams?.find(t => t.id === r.scrumTeamId);
+        return [
+          `"${r.name}"`,
+          `"${r.role}"`,
+          r.capacity,
+          `"${r.skills.join(', ')}"`,
+          `"${(r.jiraAliases || '').replace(/"/g, '""')}"`,
+          `"${team ? team.name : ''}"`,
+          `"${(r.unavailableDates || []).join(', ')}"`
+        ].join(',');
+      })
     ].join('\n');
 
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -135,10 +159,17 @@ export const Resources = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <ErrorModal 
+        isOpen={!!error} 
+        onClose={() => setError(null)} 
+        title="人员导入失败"
+        message="在导入人员文件时遇到了错误。请检查文件格式是否符合模板要求。"
+        errorDetails={error}
+      />
+      <div className="flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">团队人员管理</h2>
-          <p className="text-gray-500 mt-1">维护团队角色与技能图谱，支持实时数据修正</p>
+          <h2 className="text-2xl font-bold text-gray-900">{t('resources.title')}</h2>
+          <p className="text-gray-500 mt-1">{t('resources.desc')}</p>
         </div>
         
         <div className="flex items-center space-x-3">
@@ -156,7 +187,7 @@ export const Resources = () => {
             title="下载导入模板"
           >
             <FileDown size={16} />
-            <span>模板下载</span>
+            <span>{t('resources.downloadTemplate')}</span>
           </button>
 
           <button 
@@ -166,7 +197,7 @@ export const Resources = () => {
             title="下载当前人员列表为 CSV"
           >
             <Download size={16} />
-            <span>人员导出</span>
+            <span>{t('resources.exportBtn')}</span>
           </button>
 
           <button 
@@ -179,7 +210,7 @@ export const Resources = () => {
             }`}
           >
             {importSuccess ? <CheckCircle2 size={16} /> : <Upload size={16} />}
-            <span>{isImporting ? '导入中...' : importSuccess ? '导入成功' : '批量导入'}</span>
+            <span>{isImporting ? t('common.importing') : importSuccess ? t('common.importSuccess') : t('common.import')}</span>
           </button>
 
           <button 
@@ -187,7 +218,7 @@ export const Resources = () => {
             className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-blue-100 text-sm font-bold transition-all transform hover:-translate-y-0.5 active:scale-95 ml-2"
           >
             <UserPlus size={18} />
-            <span>添加新成员</span>
+            <span>{t('resources.addBtn')}</span>
           </button>
         </div>
       </div>
@@ -198,6 +229,7 @@ export const Resources = () => {
             <tr className="bg-gray-50/50 border-b border-gray-200 text-gray-400 text-[10px] font-black uppercase tracking-widest">
               <th className="p-4">团队成员</th>
               <th className="p-4">专业角色</th>
+              <th className="p-4">所属 Scrum</th>
               <th className="p-4 text-center">当前负荷</th>
               <th className="p-4">技能标签</th>
               <th className="p-4 text-right">操作管理</th>
@@ -209,7 +241,7 @@ export const Resources = () => {
                 <td colSpan={5} className="p-16 text-center">
                   <div className="flex flex-col items-center space-y-3">
                     <div className="p-4 bg-gray-50 rounded-full"><Users size={32} className="text-gray-200" /></div>
-                    <p className="text-gray-400 text-sm font-medium">暂无人员数据，请点击上方按钮录入团队成员。</p>
+                    <p className="text-gray-400 text-sm font-medium">{t('resources.noData')}</p>
                   </div>
                 </td>
               </tr>
@@ -229,6 +261,15 @@ export const Resources = () => {
                   }`}>
                     {r.role}
                   </span>
+                </td>
+                <td className="p-4">
+                  {r.scrumTeamId ? (
+                    <span className="px-2.5 py-1 bg-orange-50 text-orange-600 border border-orange-100 rounded-md text-[10px] font-bold uppercase">
+                      {scrumTeams?.find(t => t.id === r.scrumTeamId)?.name || '未知'}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300 text-xs">-</span>
+                  )}
                 </td>
                 <td className="p-4">
                   <div className="flex flex-col items-center space-y-1">
@@ -273,8 +314,8 @@ export const Resources = () => {
 
       {/* Unified Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl w-[480px] transform animate-in zoom-in-95 duration-200 border border-gray-100">
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-start justify-center z-50 animate-in fade-in duration-200 overflow-y-auto py-10">
+          <div className="bg-white p-8 rounded-3xl shadow-2xl w-[480px] max-h-[85vh] overflow-y-auto custom-scrollbar transform animate-in zoom-in-95 duration-200 border border-gray-100">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-xl font-black text-gray-900">
                 {editingId ? '修正成员信息' : '新增团队成员'}
@@ -294,6 +335,17 @@ export const Resources = () => {
                   onChange={e => setFormData({...formData, name: e.target.value})} 
                   className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium" 
                 />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Jira 账号映射（选填）</label>
+                <input 
+                  placeholder="姓名与 Jira 不一致时填写：邮箱 / accountId / 显示名，多个用逗号分隔"
+                  value={formData.jiraAliases} 
+                  onChange={e => setFormData({...formData, jiraAliases: e.target.value})} 
+                  className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-sm" 
+                />
+                <p className="text-[10px] text-gray-400 mt-1.5 leading-relaxed">用于把 Jira worklog 作者准确对应到该成员，从而正确统计开发/测试工时。优先级：邮箱/accountId（精确） &gt; 显示名（模糊）。</p>
               </div>
 
               <div>

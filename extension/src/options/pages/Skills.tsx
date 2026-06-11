@@ -3,8 +3,11 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { Plus, Briefcase, Cpu, X, Save, Upload, Download, FileDown, CheckCircle2 } from 'lucide-react';
 import { importSkillsFromFile } from '../../services/fileImport';
+import { ErrorModal } from '../components/ErrorModal';
+import { useTranslation } from '../../context/I18nContext';
 
 export const Skills = () => {
+  const { t } = useTranslation();
   const skills = useLiveQuery(() => db.skills.toArray());
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -13,6 +16,7 @@ export const Skills = () => {
   const [newSkillType, setNewSkillType] = useState<'business' | 'technical'>('business');
   const [isImporting, setIsImporting] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Initial data seeding
   useEffect(() => {
@@ -58,14 +62,15 @@ export const Skills = () => {
     if (!file) return;
 
     setIsImporting(true);
+    setError(null);
     try {
       const count = await importSkillsFromFile(file);
       setImportSuccess(true);
       setTimeout(() => setImportSuccess(false), 3000);
       console.log(`Successfully imported ${count} unique skills.`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Import failed:', err);
-      alert('导入失败，请检查文件格式。');
+      setError(err.message);
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -103,10 +108,17 @@ export const Skills = () => {
 
   return (
     <div className="space-y-8">
+      <ErrorModal 
+        isOpen={!!error} 
+        onClose={() => setError(null)} 
+        title="技能导入失败"
+        message="在导入技能标签时遇到了错误。请检查文件格式是否符合要求。"
+        errorDetails={error}
+      />
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">人员技能管理</h2>
-          <p className="text-gray-500 mt-1">管理团队的业务领域知识与技术栈能力标签</p>
+          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{t('skills.title')}</h2>
+          <p className="text-gray-500 mt-1">{t('skills.desc')}</p>
         </div>
 
         <div className="flex items-center space-x-3">
@@ -124,7 +136,7 @@ export const Skills = () => {
             title="下载导入模板"
           >
             <FileDown size={16} />
-            <span>模板下载</span>
+            <span>{t('common.downloadTemplate')}</span>
           </button>
 
           <button 
@@ -134,7 +146,7 @@ export const Skills = () => {
             title="导出当前标签"
           >
             <Download size={16} />
-            <span>标签导出</span>
+            <span>{t('common.export')}</span>
           </button>
 
           <button 
@@ -147,7 +159,7 @@ export const Skills = () => {
             }`}
           >
             {importSuccess ? <CheckCircle2 size={16} /> : <Upload size={16} />}
-            <span>{isImporting ? '导入中...' : importSuccess ? '导入成功' : '批量导入'}</span>
+            <span>{isImporting ? t('common.importing') : importSuccess ? t('common.importSuccess') : t('common.import')}</span>
           </button>
 
           <button 
@@ -155,7 +167,7 @@ export const Skills = () => {
             className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-blue-100 text-sm font-bold transition-all transform hover:-translate-y-0.5 ml-2"
           >
             <Plus size={18} />
-            <span>新增技能</span>
+            <span>{t('skills.addSkill')}</span>
           </button>
         </div>
       </div>
@@ -231,7 +243,7 @@ export const Skills = () => {
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
           <div className="bg-white p-8 rounded-3xl shadow-2xl w-[400px] transform animate-in zoom-in-95 duration-200 border border-gray-100">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-gray-900">新增技能标签</h3>
+              <h3 className="text-xl font-black text-gray-900">{t('skills.addSkill')}</h3>
               <button onClick={() => setShowModal(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full">
                 <X size={20} />
               </button>
@@ -286,7 +298,7 @@ export const Skills = () => {
                   className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-2xl shadow-xl shadow-blue-100 font-bold transition-all active:scale-95"
                 >
                   <Save size={18} />
-                  <span>保存技能</span>
+                  <span>{t('skills.saveSkill')}</span>
                 </button>
               </div>
             </form>

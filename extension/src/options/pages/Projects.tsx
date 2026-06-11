@@ -3,6 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { FolderKanban, Info, UploadCloud, Download } from 'lucide-react';
 import { importProjectsFromFile } from '../../services/fileImport';
+import { ErrorModal } from '../components/ErrorModal';
+import { useTranslation } from '../../context/I18nContext';
 
 const priorityWeight: Record<string, number> = {
   'High': 3,
@@ -24,10 +26,12 @@ const getPriorityWeight = (p: string) => {
 };
 
 export const Projects = () => {
-  // Use projects directly as they are stored in the order of insertion (ID)
+  const { t } = useTranslation();
   const projects = useLiveQuery(() => db.projects.toArray());
+  const scrumTeams = useLiveQuery(() => db.scrumTeams.toArray());
   const [isImporting, setIsImporting] = useState(false);
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // We no longer manually sort here because the physical order in CSV is the source of truth.
@@ -38,27 +42,46 @@ export const Projects = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Import REPLACES all existing projects (clear + bulkAdd). Warn first.
+    if ((projects?.length || 0) > 0) {
+      if (!window.confirm(`导入将清空并覆盖现有的 ${projects!.length} 个项目（不可撤销）。是否继续？`)) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    }
+
     setIsImporting(true);
+    setError(null);
     try {
       const count = await importProjectsFromFile(file);
       setMessage({ type: 'success', text: `成功导入 ${count} 个排期项目！` });
+      setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
-      setMessage({ type: 'error', text: `导入失败: ${err.message}` });
+      console.error('项目导入失败:', err);
+      setError(err.message);
+      setMessage(null);
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = ''; // reset input
       }
-      setTimeout(() => setMessage(null), 3000);
     }
   };
 
   return (
     <div className="space-y-6">
+      <ErrorModal 
+        isOpen={!!error} 
+        onClose={() => setError(null)} 
+        title="项目导入失败"
+        message="在导入项目文件时遇到了错误。请检查文件格式是否符合模板要求，并确保表头名称正确。"
+        errorDetails={error}
+      />
+
       <div className="flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">项目管理</h2>
-          <p className="text-gray-500 mt-1">查看待排期的项目详情（按 CSV 导入顺序执行严格优先级排期）</p>
+          <h2 className="text-2xl font-bold text-gray-900">{t('projects.title')}</h2>
+          <p className="text-gray-500 mt-1">{t('projects.desc')}</p>
         </div>
         <div className="flex flex-col items-end space-y-2">
           <div className="flex items-center space-x-3">
@@ -69,7 +92,7 @@ export const Projects = () => {
               title="下载带有标准表头的模板文件"
             >
               <Download size={18} />
-              <span>下载模板 (CSV)</span>
+              <span>{t('projects.downloadTemplate')}</span>
             </a>
             <input 
               type="file" 
@@ -85,11 +108,11 @@ export const Projects = () => {
               className="flex items-center space-x-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg disabled:opacity-50 transition-colors shadow-sm"
             >
               <UploadCloud size={18} />
-              <span>{isImporting ? '正在导入...' : '导入项目 (CSV/Excel)'}</span>
+              <span>{isImporting ? t('projects.importing') : t('projects.importBtn')}</span>
             </button>
             <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg flex items-center space-x-2 text-sm font-medium border border-blue-100">
               <FolderKanban size={18} />
-              <span>共计 {projects?.length || 0} 个项目</span>
+              <span>{t('projects.totalCount').replace('{count}', (projects?.length || 0).toString())}</span>
             </div>
           </div>
           {message && (
@@ -107,6 +130,8 @@ export const Projects = () => {
           <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-xs uppercase tracking-wider">
+                <th className="p-4 font-semibold">AI 策略</th>
+                <th className="p-4 font-semibold">Scrum 约束</th>
                 <th className="p-4 font-semibold w-16">顺序</th>
                 <th className="p-4 font-semibold min-w-[200px]">项目名称 / Epic</th>
                 <th className="p-4 font-semibold">优先级</th>
@@ -121,16 +146,62 @@ export const Projects = () => {
             <tbody>
               {(!displayProjects || displayProjects.length === 0) ? (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center">
+                  <td colSpan={11} className="p-12 text-center">
                     <div className="flex flex-col items-center justify-center text-gray-400 space-y-2">
                       <Info size={40} className="opacity-20" />
-                      <p>暂无项目数据，请点击上方按钮导入 CSV/Excel 文件。</p>
+                      <p>{t('projects.noData')}</p>
                     </div>
                   </td>
                 </tr>
               ) : null}
               {displayProjects?.map((p, index) => (
                 <tr key={p.id} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors group">
+                  <td className="p-4">
+                    <select
+                      value={p.schedulingStrategy || 'focused'}
+                      onChange={(e) => {
+                        db.projects.update(p.id!, { schedulingStrategy: e.target.value as any, rejectionReason: '' });
+                      }}
+                      className="appearance-none py-1 px-2 text-xs font-bold text-gray-600 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-white w-24 hover:border-gray-300"
+                    >
+                      <option value="focused">专注模式</option>
+                      <option value="balanced">均衡模式</option>
+                      <option value="urgent">紧急模式</option>
+                    </select>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex flex-col space-y-1">
+                      <select
+                        value={p.scrumTeamId || ''}
+                        onChange={(e) => {
+                          const val = e.target.value ? Number(e.target.value) : undefined;
+                          db.projects.update(p.id!, { 
+                            scrumTeamId: val,
+                            teamSchedulingMode: val ? (p.teamSchedulingMode || 'cross-team') : 'all-in',
+                            rejectionReason: ''
+                          });
+                        }}
+                        className="appearance-none py-1 px-2 text-xs font-bold text-gray-600 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-white w-28 hover:border-gray-300"
+                      >
+                        <option value="">(无团队)</option>
+                        {scrumTeams?.map(st => (
+                          <option key={st.id} value={st.id}>{st.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={p.teamSchedulingMode || 'all-in'}
+                        onChange={(e) => {
+                          db.projects.update(p.id!, { teamSchedulingMode: e.target.value as any, rejectionReason: '' });
+                        }}
+                        className="appearance-none py-1 px-2 text-[10px] text-gray-500 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-gray-50 w-28 hover:border-gray-300"
+                        disabled={!p.scrumTeamId}
+                      >
+                        <option value="team-first">本队专属 (team-first)</option>
+                        <option value="cross-team">跨队借人 (cross-team)</option>
+                        <option value="all-in">全局统筹 (all-in)</option>
+                      </select>
+                    </div>
+                  </td>
                   <td className="p-4 text-xs font-mono text-gray-400">#{index + 1}</td>
                   <td className="p-4">
                     <div className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{p.name}</div>
