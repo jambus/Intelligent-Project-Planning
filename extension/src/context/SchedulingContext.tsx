@@ -298,7 +298,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         return allowed;
       };
 
-      const applySuggestions = async (suggestions: AIMicroAllocation[], phase: 'dev' | 'test', pool: any[]) => {
+      const applySuggestions = async (suggestions: AIMicroAllocation[], phase: 'dev' | 'test', pool: any[], isLatePass: boolean) => {
         let count = 0;
         console.group(`[Hard Logic] Applying ${suggestions.length} AI suggestions for ${phase.toUpperCase()}`);
         const { gaps: cGaps, idle: cIdle } = runAudit(readyProjects, resources, currentAllocations);
@@ -311,7 +311,8 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           if (!project || !resource) continue;
 
           if (project.schedulingStrategy === 'focused') {
-            if (focusedAssigned.has(project.id!)) {
+            const hasAlloc = currentAllocations.some(a => Number(a.projectId) === Number(project.id) && a.allocationType === phase);
+            if (focusedAssigned.has(project.id!) || hasAlloc) {
               console.warn(`[Hard Logic] Skipped secondary suggestion for focused project ${project.id}`);
               continue;
             }
@@ -323,7 +324,6 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           if (!pGap || !rIdle) continue;
 
           // Enforce Scrum Team Constraint in JS hard logic
-          const isLatePass = currentStep === 3;
           const allowedIds = computeAllowedResourceIds(project, isLatePass);
           if (!allowedIds.includes(Number(resource.id))) {
             console.warn(`[Hard Logic] Blocked AI suggestion violating Scrum Team constraints: Project ${project.id} -> Resource ${resource.id}`);
@@ -524,9 +524,13 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           allowedResourceIds: computeAllowedResourceIds(p, false)
         })).filter(p => p.gap >= 1);
         if (bDev.length && dIdle.some(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role))) {
-          const sug = await suggestAllocationsForBatch(bDev as any, dIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)), 'dev', false, signal);
-          checkStop();
-          await applySuggestions(sug, 'dev', batch);
+          const batchAllowedIds = new Set(bDev.flatMap(p => p.allowedResourceIds));
+          const filteredIdle = dIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role) && batchAllowedIds.has(Number(r.id)));
+          if (filteredIdle.length > 0) {
+            const sug = await suggestAllocationsForBatch(bDev as any, filteredIdle, 'dev', false, signal);
+            checkStop();
+            await applySuggestions(sug, 'dev', batch, false);
+          }
         }
         checkStop();
         const { gaps: tGaps, idle: tIdle } = runAudit(readyProjects, resources, currentAllocations);
@@ -539,9 +543,13 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           allowedResourceIds: computeAllowedResourceIds(p, false)
         })).filter(p => p.gap >= 1);
         if (bTest.length && tIdle.some(r => r.role === '测试工程师')) {
-          const sug = await suggestAllocationsForBatch(bTest as any, tIdle.filter(r => r.role === '测试工程师'), 'test', false, signal);
-          checkStop();
-          await applySuggestions(sug, 'test', batch);
+          const batchAllowedIds = new Set(bTest.flatMap(p => p.allowedResourceIds));
+          const filteredIdle = tIdle.filter(r => r.role === '测试工程师' && batchAllowedIds.has(Number(r.id)));
+          if (filteredIdle.length > 0) {
+            const sug = await suggestAllocationsForBatch(bTest as any, filteredIdle, 'test', false, signal);
+            checkStop();
+            await applySuggestions(sug, 'test', batch, false);
+          }
         }
       }
 
@@ -597,9 +605,13 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         }).filter(g => g.gap >= 1);
         const devI = hIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role));
         if (devG.length && devI.length) {
-          const sug = await suggestAllocationsForBatch(devG as any, devI, 'dev', true, signal);
-          checkStop();
-          await applySuggestions(sug, 'dev', pool);
+          const batchAllowedIds = new Set(devG.flatMap(p => p.allowedResourceIds));
+          const filteredIdle = devI.filter(r => batchAllowedIds.has(Number(r.id)));
+          if (filteredIdle.length > 0) {
+            const sug = await suggestAllocationsForBatch(devG as any, filteredIdle, 'dev', true, signal);
+            checkStop();
+            await applySuggestions(sug, 'dev', pool, true);
+          }
         }
         checkStop();
         const { gaps: hGaps2, idle: hIdle2 } = runAudit(readyProjects, resources, currentAllocations);
@@ -616,9 +628,13 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         }).filter(g => g.gap >= 1);
         const testI = hIdle2.filter(r => r.role === '测试工程师');
         if (testG.length && testI.length) {
-          const sug = await suggestAllocationsForBatch(testG as any, testI, 'test', true, signal);
-          checkStop();
-          await applySuggestions(sug, 'test', pool);
+          const batchAllowedIds = new Set(testG.flatMap(p => p.allowedResourceIds));
+          const filteredIdle = testI.filter(r => batchAllowedIds.has(Number(r.id)));
+          if (filteredIdle.length > 0) {
+            const sug = await suggestAllocationsForBatch(testG as any, filteredIdle, 'test', true, signal);
+            checkStop();
+            await applySuggestions(sug, 'test', pool, true);
+          }
         }
         progress = totalAllocatedThisSession > startMD;
         loop++;

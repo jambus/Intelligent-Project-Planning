@@ -5,8 +5,10 @@ import { Trash2, Edit2, UserPlus, Save, X, Users, Upload, FileDown, CheckCircle2
 import { addResource, deleteResource, updateResource } from '../../db/services';
 import { importResourcesFromFile } from '../../services/fileImport';
 import { ErrorModal } from '../components/ErrorModal';
+import { useTranslation } from '../../context/I18nContext';
 
 export const Resources = () => {
+  const { t } = useTranslation();
   const resources = useLiveQuery(() => db.resources.toArray());
   const allSkills = useLiveQuery(() => db.skills.toArray());
   const scrumTeams = useLiveQuery(() => db.scrumTeams.toArray());
@@ -164,10 +166,10 @@ export const Resources = () => {
         message="在导入人员文件时遇到了错误。请检查文件格式是否符合模板要求。"
         errorDetails={error}
       />
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">团队人员管理</h2>
-          <p className="text-gray-500 mt-1">维护团队角色与技能图谱，支持实时数据修正</p>
+          <h2 className="text-2xl font-bold text-gray-900">{t('resources.title')}</h2>
+          <p className="text-gray-500 mt-1">{t('resources.desc')}</p>
         </div>
         
         <div className="flex items-center space-x-3">
@@ -185,7 +187,7 @@ export const Resources = () => {
             title="下载导入模板"
           >
             <FileDown size={16} />
-            <span>模板下载</span>
+            <span>{t('resources.downloadTemplate')}</span>
           </button>
 
           <button 
@@ -195,7 +197,7 @@ export const Resources = () => {
             title="下载当前人员列表为 CSV"
           >
             <Download size={16} />
-            <span>人员导出</span>
+            <span>{t('resources.exportBtn')}</span>
           </button>
 
           <button 
@@ -208,7 +210,7 @@ export const Resources = () => {
             }`}
           >
             {importSuccess ? <CheckCircle2 size={16} /> : <Upload size={16} />}
-            <span>{isImporting ? '导入中...' : importSuccess ? '导入成功' : '批量导入'}</span>
+            <span>{isImporting ? t('common.importing') : importSuccess ? t('common.importSuccess') : t('common.import')}</span>
           </button>
 
           <button 
@@ -216,7 +218,7 @@ export const Resources = () => {
             className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-blue-100 text-sm font-bold transition-all transform hover:-translate-y-0.5 active:scale-95 ml-2"
           >
             <UserPlus size={18} />
-            <span>添加新成员</span>
+            <span>{t('resources.addBtn')}</span>
           </button>
         </div>
       </div>
@@ -239,7 +241,7 @@ export const Resources = () => {
                 <td colSpan={5} className="p-16 text-center">
                   <div className="flex flex-col items-center space-y-3">
                     <div className="p-4 bg-gray-50 rounded-full"><Users size={32} className="text-gray-200" /></div>
-                    <p className="text-gray-400 text-sm font-medium">暂无人员数据，请点击上方按钮录入团队成员。</p>
+                    <p className="text-gray-400 text-sm font-medium">{t('resources.noData')}</p>
                   </div>
                 </td>
               </tr>

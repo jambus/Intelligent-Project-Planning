@@ -4,6 +4,7 @@ import { db } from '../../db';
 import { FolderKanban, Info, UploadCloud, Download } from 'lucide-react';
 import { importProjectsFromFile } from '../../services/fileImport';
 import { ErrorModal } from '../components/ErrorModal';
+import { useTranslation } from '../../context/I18nContext';
 
 const priorityWeight: Record<string, number> = {
   'High': 3,
@@ -25,6 +26,7 @@ const getPriorityWeight = (p: string) => {
 };
 
 export const Projects = () => {
+  const { t } = useTranslation();
   const projects = useLiveQuery(() => db.projects.toArray());
   const scrumTeams = useLiveQuery(() => db.scrumTeams.toArray());
   const [isImporting, setIsImporting] = useState(false);
@@ -78,8 +80,8 @@ export const Projects = () => {
 
       <div className="flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">项目管理</h2>
-          <p className="text-gray-500 mt-1">查看待排期的项目详情（按 CSV 导入顺序执行严格优先级排期）</p>
+          <h2 className="text-2xl font-bold text-gray-900">{t('projects.title')}</h2>
+          <p className="text-gray-500 mt-1">{t('projects.desc')}</p>
         </div>
         <div className="flex flex-col items-end space-y-2">
           <div className="flex items-center space-x-3">
@@ -90,7 +92,7 @@ export const Projects = () => {
               title="下载带有标准表头的模板文件"
             >
               <Download size={18} />
-              <span>下载模板 (CSV)</span>
+              <span>{t('projects.downloadTemplate')}</span>
             </a>
             <input 
               type="file" 
@@ -106,11 +108,11 @@ export const Projects = () => {
               className="flex items-center space-x-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg disabled:opacity-50 transition-colors shadow-sm"
             >
               <UploadCloud size={18} />
-              <span>{isImporting ? '正在导入...' : '导入项目 (CSV/Excel)'}</span>
+              <span>{isImporting ? t('projects.importing') : t('projects.importBtn')}</span>
             </button>
             <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg flex items-center space-x-2 text-sm font-medium border border-blue-100">
               <FolderKanban size={18} />
-              <span>共计 {projects?.length || 0} 个项目</span>
+              <span>{t('projects.totalCount').replace('{count}', (projects?.length || 0).toString())}</span>
             </div>
           </div>
           {message && (
@@ -147,7 +149,7 @@ export const Projects = () => {
                   <td colSpan={11} className="p-12 text-center">
                     <div className="flex flex-col items-center justify-center text-gray-400 space-y-2">
                       <Info size={40} className="opacity-20" />
-                      <p>暂无项目数据，请点击上方按钮导入 CSV/Excel 文件。</p>
+                      <p>{t('projects.noData')}</p>
                     </div>
                   </td>
                 </tr>
@@ -158,7 +160,7 @@ export const Projects = () => {
                     <select
                       value={p.schedulingStrategy || 'focused'}
                       onChange={(e) => {
-                        db.projects.update(p.id!, { schedulingStrategy: e.target.value as any });
+                        db.projects.update(p.id!, { schedulingStrategy: e.target.value as any, rejectionReason: '' });
                       }}
                       className="appearance-none py-1 px-2 text-xs font-bold text-gray-600 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-white w-24 hover:border-gray-300"
                     >
@@ -175,7 +177,8 @@ export const Projects = () => {
                           const val = e.target.value ? Number(e.target.value) : undefined;
                           db.projects.update(p.id!, { 
                             scrumTeamId: val,
-                            teamSchedulingMode: val ? (p.teamSchedulingMode || 'cross-team') : 'all-in'
+                            teamSchedulingMode: val ? (p.teamSchedulingMode || 'cross-team') : 'all-in',
+                            rejectionReason: ''
                           });
                         }}
                         className="appearance-none py-1 px-2 text-xs font-bold text-gray-600 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-white w-28 hover:border-gray-300"
@@ -188,7 +191,7 @@ export const Projects = () => {
                       <select
                         value={p.teamSchedulingMode || 'all-in'}
                         onChange={(e) => {
-                          db.projects.update(p.id!, { teamSchedulingMode: e.target.value as any });
+                          db.projects.update(p.id!, { teamSchedulingMode: e.target.value as any, rejectionReason: '' });
                         }}
                         className="appearance-none py-1 px-2 text-[10px] text-gray-500 border border-gray-200 rounded focus:ring-0 cursor-pointer bg-gray-50 w-28 hover:border-gray-300"
                         disabled={!p.scrumTeamId}

@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.7] - 2026-06-05
+
+### 优化与修复 (Improvements & Fixes)
+- **排期引擎状态同步与跨边界约束 (State Sync & Boundaries)**：
+  - 重构 `applySuggestions` 参数传递，通过显式下传 `isLatePass` 取代读取异步的 `currentStep` 状态。修复了 `cross-team`（跨队借人）模式在最后排期阶段偶尔不生效的问题。
+  - 在大模型请求 (`suggestAllocationsForBatch`) 前置了严格的候选池裁剪。系统会根据当前批次项目的 `allowedResourceIds` (Scrum 约束) 过滤闲置人员，AI 只会看到合法范围内的候选人。大幅降低大模型 Token 消耗，彻底消灭 AI 瞎编和幻觉推荐。
+  - 修复 `focused`（专注模式）的跨次重排漏洞，结合历史分配记录和跨 Pass 的 Set 控制，防止对同一专注项目重复指派多名人员。
+- **大盘一致性与节假日扣减 (Dashboard & Holiday Sync)**：
+  - 排期大盘的 `gap` 缺口计算和 `calculateWeeklyMD`（每周折算工时）全面引入当前 `workingDaySet`。彻底解决“已排满 / 部分排满”状态评估，以及周维度投入工时计算因节假日口径不一致导致的 UI 展示错误。
+- **项目与团队配置连动联动 (Team Config Cascade)**：
+  - 级联删除优化：在「Scrum 管理」解散团队时，系统不仅清理人员归属，还会将对应项目的 `scrumTeamId` 设为空，并强制降级调度模式为 `all-in`（全局统筹），防止项目因找不到废弃团队的人员陷入排期死锁。
+  - 在「项目配置」页修改策略或 Scrum 约束条件时，系统会自动清空上一次遗留的 `rejectionReason`（排不上原因），避免大盘状态未更新产生视觉误导。
+- **排期大盘深度重构与架构升级 (Dashboard Refactoring & Architecture)**：
+  - **核心计算与状态下沉**：引入全局 `DashboardContext` 上下文，统一接管所有 IndexedDB `useLiveQuery` 订阅以及重量级的缺口/容量计算 (`runAuditForUI`)，彻底解决了页面切换带来的状态重置与重复渲染问题，实现了跨页面的 Single Source of Truth。
+  - **页面精细化拆分**：将原先臃肿的单一大盘拆解为 4 个职责单一、高内聚的子页面组件：`DashboardOverview` (全局概览与排期控制台)、`TeamCapacity` (团队容量监控)、`ProjectResults` (排期异常及结果展示) 和 `ScheduleDetails` (排期明细大矩阵)，极大提升了代码可维护性和用户浏览体验。
+  - **概览面板增强**：在全局概览页面，移除了原有的“最紧张的团队 Top 3”局部视图，直接升级为展示完整的“Scrum 团队容量 (当前选定时段)”看板，让全局负荷水位一目了然。
+- **中英双语国际化 (I18n Localization)**：
+  - **无依赖轻量化设计**：实现了基于 React Context 的原生 `I18nProvider`，无需引入 `i18next` 等重量级第三方库，保持插件体积轻量。
+  - **全面覆盖界面元素**：将侧边栏菜单、系统设置、被重构的四个全局大盘子页面 (`DashboardOverview`、`TeamCapacity`、`ProjectResults`、`ScheduleDetails`) 以及所有其他管理页面（项目、人员、技能、Scrum 等）中的标题、描述、表头及**全部核心操作按钮**等硬编码中文字符串提取为独立的 `zh.ts` 与 `en.ts` 词典文件。
+  - **实时切换与持久化**：在系统设置中新增了“界面语言”选项（支持自动/中文/English），切换即刻全局生效，并持久化保存至 `chrome.storage.local` 中。
+
 ## [1.0.6] - 2026-06-05
 
 ### 新特性 (New Features)
