@@ -164,7 +164,11 @@ export const zh = {
     opPrefix: '[运维] ',
     unknownResource: '未知人员',
     unknownProject: '未知项目',
-    mixedRatio: '混合'
+    mixedRatio: '混合',
+    exportSchedule: '导出排期',
+    importSchedule: '导入排期',
+    importConfirmTitle: '确定要导入排期吗？',
+    importConfirmDesc: '此操作将清除当前所有排期记录，并使用导入的排期进行覆盖，且不可撤销。'
   },
   settings: {
     title: '系统设置',

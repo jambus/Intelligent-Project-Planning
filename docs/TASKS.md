@@ -466,3 +466,81 @@
 - [x] **DONE** **28.11 [DOC-02] 更新 PRD、Changelog 与 Agent 指南**
     - [x] 28.11.1 新增 PRD § 3.3.13 章节，归档上述精准度与健壮性加固。
     - [x] 28.11.2 `CHANGELOG.md` 新增 v1.0.5 条目；`AGENTS.md`/`CLAUDE.md` 补充本地日期、节假日加载、导入覆盖、级联删除等避坑提示。
+
+## 阶段二十九：排期结果导出与导入 CSV (Phase 29: Schedule Export & Import CSV)
+
+> 目标：排期完成后支持一键导出人员×周维度的排期结果 CSV，文件可直接用于手工编辑或重新导入。
+
+### P0 — 导出功能 (Export)
+
+- [x] **29.1 [EXPORT-01] 工具函数：`getWeekMonday`**
+    - [x] 29.1.1 在 `utils/dateUtils.ts` 新增 `getWeekMonday(date: Date): Date`，返回给定日期所在周的周一（周一作为一周起始）。
+    - [x] 29.1.2 使用 `formatLocalDate` 确保日期不受时区偏移影响。
+
+- [x] **29.2 [EXPORT-02] 核心导出函数：`exportAllocationsToCSV`**
+    - [x] 29.2.1 在 `services/fileImport.ts` 新增 `exportAllocationsToCSV()` 函数。
+    - [x] 29.2.2 从 IndexedDB 读取所有 `allocations`、`resources`、`projects`。
+    - [x] 29.2.3 对每条 allocation，按周拆分工作日：
+        - 遍历 allocation 的日期范围，按周聚合
+        - 计算每周内的工作日数 × allocationPercentage / 100 = 该周人天
+        - 产品运维虚拟项目（负 ID）标记 `[运维]` 前缀
+    - [x] 29.2.4 CSV 列定义：`人员,角色,项目,类型,周起始日,天数`
+    - [x] 29.2.5 输出带 BOM (`\uFEFF`) 的 UTF-8 CSV，触发浏览器下载。
+    - [x] 29.2.6 天数保留一位小数。
+
+- [x] **29.3 [EXPORT-03] Dashboard 导出按钮**
+    - [x] 29.3.1 在 `DashboardOverview.tsx` 中，排期完成状态（`currentStep === 4 && !isScheduling`）附近增加"导出排期 CSV"按钮。
+    - [x] 29.3.2 按钮点击调用 `exportAllocationsToCSV()`。
+    - [x] 29.3.3 图标使用 `lucide-react` 的 `Download` 图标。
+
+- [x] **29.4 [EXPORT-04] i18n 支持**
+    - [x] 29.4.1 `locales/zh.ts` 新增 `dashboard.exportSchedule: '导出排期'`。
+    - [x] 29.4.2 `locales/en.ts` 新增 `dashboard.exportSchedule: 'Export Schedule'`。
+
+### P1 — 导入功能 (Import)
+
+- [x] **29.5 [IMPORT-01] 核心导入函数：`importAllocationsFromFile`**
+    - [x] 29.5.1 在 `services/fileImport.ts` 新增 `importAllocationsFromFile(file: File)` 函数。
+    - [x] 29.5.2 解析 CSV 表头，按列名匹配（复用 `findColumnIndex`）。
+    - [x] 29.5.3 按 (人员名, 项目名, 类型) 分组，同组内按周起始日排序。
+    - [x] 29.5.4 合并连续周为单条 allocation 记录：
+        - `startDate` = 第一周周一
+        - `endDate` = 最后一周周五（或最后一个工作日）
+        - `allocationPercentage` = 反算（天数 / 该周工作日数 × 100），取组内中位值并四舍五入为整数
+    - [x] 29.5.5 通过人员名匹配 `resources` 表的 `id`，项目名匹配 `projects` 表的 `id`。未匹配的行跳过并汇总警告。
+    - [x] 29.5.6 导入前弹出确认弹窗（destructive：`db.allocations.clear()` + `bulkAdd`）。
+
+- [x] **29.6 [IMPORT-02] Dashboard 或独立页面入口**
+    - [x] 29.6.1 在 Dashboard 的导出按钮旁增加"导入排期"按钮（`Upload` 图标）。
+    - [x] 29.6.2 触发文件选择器，支持 `.csv` / `.xlsx` 格式。
+    - [x] 29.6.3 导入完成后刷新排期视图。
+
+- [x] **29.7 [IMPORT-03] i18n 支持**
+    - [x] 29.7.1 `locales/zh.ts` 新增 `dashboard.importSchedule: '导入排期'`。
+    - [x] 29.7.2 `locales/en.ts` 新增 `dashboard.importSchedule: 'Import Schedule'`。
+
+### P2 — 验证与文档 (Verification & Docs)
+
+- [x] **29.8 [BUILD-01] 构建验证**
+    - [x] 29.8.1 执行 `npm run build` 确保通过 TypeScript strict 编译。
+    - [x] 29.8.2 手动验证：排期 → 导出 → 手工编辑 → 导入 → 结果一致。
+
+- [x] **29.9 [DOC-01] 文档更新**
+    - [x] 29.9.1 更新 `docs/intelligent-resource-planner.md` 新增导出/导入章节。
+    - [x] 29.9.2 更新 `CHANGELOG.md`。
+### 新增特性 (v1.0.9 - 排期矩阵在线编辑)
+- [x] **排期矩阵在线手工编辑**
+  - 在 Schedule Details 页面，用户可直接点击空白或已有排期单元格，将其转换为 `<input>` 并进行直接编辑。
+  - 通过 `updateWeeklyAllocation` 实现底层的精准覆盖、边界切分以及响应式 IndexedDB 事务。
+  - 按下 `Enter` 或触发 `Blur` 自动触发保存操作，全局重绘矩阵与资源利用率大盘。
+### 新增特性 (v1.0.10 - 高级排期矩阵编辑与锁定)
+- [x] **新增排期行功能**
+  - 在 Schedule Details 顶部操作区新增 `+ 新增排期` 按钮。
+  - 支持通过弹窗快速指定人员、项目、目标周和投入人天，从而从无到有生成全新的排期矩阵行。
+- [x] **排期换人功能**
+  - 在所有视图（Resource / Project / Operations）下，排期矩阵行首的人员名称均转变为互动式的 `<select>` 下拉选择框。
+  - 切换人员会自动将该项目下对应旧人员的分配无损转移至新人员名下。
+- [x] **排期行锁定功能**
+  - 排期行首新增 `Lock/Unlock` 切换图标（支持锁定/解锁当前行的排期）。
+  - AI 排期的全量大清洗（一键排期）和项目失败回滚（完整性审计回滚）逻辑中，增加对 `isLocked` 为 `true` 的数据进行免疫保护。
+  - 手工换人、调整或新增产生的排期数据自动继承对应行的锁定状态。

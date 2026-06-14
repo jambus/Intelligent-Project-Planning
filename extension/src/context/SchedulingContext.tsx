@@ -110,7 +110,9 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
       setCurrentStep(1);
       setScheduleStatus('🚀 像素建模：构建每日资源容量矩阵...');
       if (shouldClear) {
-        await db.allocations.clear();
+        const allIds = await db.allocations.toArray();
+        const unlockedIds = allIds.filter(a => !a.isLocked).map(a => a.id!);
+        await db.allocations.bulkDelete(unlockedIds);
       }
       checkStop();
 
@@ -570,8 +572,10 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             (g.devGap === project.devTotalMd && g.testGap < project.testTotalMd) ||
             isDevSevereUnderAlloc
           ) {
-            currentAllocations = currentAllocations.filter(a => Number(a.projectId) !== Number(project.id));
-            await db.allocations.where('projectId').equals(project.id!).delete();
+            currentAllocations = currentAllocations.filter(a => Number(a.projectId) !== Number(project.id) || a.isLocked);
+            const rollbackAllocs = await db.allocations.where({ projectId: project.id! }).toArray();
+            const idsToDelete = rollbackAllocs.filter(a => !a.isLocked).map(a => a.id!);
+            await db.allocations.bulkDelete(idsToDelete);
             retryQueue.push(project);
             didRollback = true;
           }
