@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.7] - 2026-06-05
+## [1.0.7CE] - 2026-06-05
 
 ### 优化与修复 (Improvements & Fixes)
 - **排期引擎状态同步与跨边界约束 (State Sync & Boundaries)**：
