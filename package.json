@@ -8,7 +8,7 @@
     "build": "npm run build --prefix extension",
     "zip": "npm run zip --prefix extension",
     "crx": "mkdir -p release && npm run build --prefix extension && npx crx3 extension/dist -p privatekey.pem -o release/irp.crx",
-    "crx-spec": "mkdir -p release && npm run build --prefix extension && npx crx3 extension/dist -p chrome_dev_private_key.pem -o release/irp-spec.crx",
+    "crx-spec": "mkdir -p release && npm run build --prefix extension && npx crx3 extension/dist -p chrome_dev_private_key.pem -o release/irp-ce.crx",
     "publish": "npm run publish --prefix extension"
   }
 }
