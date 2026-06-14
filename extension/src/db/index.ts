@@ -58,7 +58,8 @@ export interface Allocation {
   startDate: string; // ISO date
   endDate: string; // ISO date
   allocationPercentage: number; // e.g., 50 for 50% time
-  allocationType?: 'dev' | 'test'; // Whether this allocation is for dev gap or test gap
+  allocationType?: 'dev' | 'test';
+  isLocked?: boolean; // Whether this allocation is for dev gap or test gap
 }
 
 export interface JiraWorklog {
