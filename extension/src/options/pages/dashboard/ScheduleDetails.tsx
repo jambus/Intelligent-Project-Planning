@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useDashboard } from '../../../context/DashboardContext';
 import { useTranslation } from '../../../context/I18nContext';
 import { calculateWeeklyMD } from '../../../utils/dateUtils';
-import { User, Briefcase } from 'lucide-react';
+import { User, Briefcase, Download, Upload } from 'lucide-react';
+import { exportScheduleCsv, importScheduleCsv } from '../../../services/scheduleCsv';
 
 export const ScheduleDetails = () => {
   const { 
@@ -12,6 +13,27 @@ export const ScheduleDetails = () => {
   const { t } = useTranslation();
 
   const [groupMode, setGroupMode] = useState<'resource' | 'project'>('resource');
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleExport = () => {
+    exportScheduleCsv(allocations, projects, resources, operations, displayWeeks, workingDaySet);
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+    setIsImporting(true);
+    try {
+      await importScheduleCsv(e.target.files);
+      // Optional: Add a success toast here
+    } catch (error) {
+      console.error('Import failed', error);
+      alert(t('common.error'));
+    } finally {
+      setIsImporting(false);
+      // Reset input
+      e.target.value = '';
+    }
+  };
 
   return (
     <div className="space-y-6 pb-20">
@@ -19,6 +41,39 @@ export const ScheduleDetails = () => {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{t('dashboard.scheduleDetailsTitle')}</h2>
           <p className="text-xs font-bold text-gray-400 mt-1.5">{t('dashboard.scheduleDetailsDesc')}</p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <input
+            type="file"
+            id="import-schedule-csv"
+            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+            className="hidden"
+            onChange={handleImport}
+          />
+          <button 
+            onClick={() => {
+               if (window.confirm(t('dashboard.importConfirmDesc'))) {
+                 document.getElementById('import-schedule-csv')?.click();
+               }
+            }}
+            disabled={isImporting}
+            className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
+          >
+            <Upload size={16} className="text-gray-500" />
+            <span>{isImporting ? t('common.importing') : t('dashboard.importSchedule')}</span>
+          </button>
+          <button 
+            onClick={handleExport}
+            disabled={!allocations || allocations.length === 0}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm ${
+              !allocations || allocations.length === 0 
+                ? 'bg-blue-50 text-blue-300 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            <Download size={16} />
+            <span>{t('dashboard.exportSchedule')}</span>
+          </button>
         </div>
       </div>
 
@@ -55,7 +110,7 @@ export const ScheduleDetails = () => {
                   <th rowSpan={2} className="p-4 text-center bg-gray-50">{t('dashboard.colRatio')}</th>
                   {displayWeeksGrouped.map((g, idx) => (
                     <th key={idx} colSpan={g.span} className="py-2 text-center border-l border-gray-200 text-gray-500 bg-gray-100">
-                      {g.month}{t('dashboard.monthAbbr')}
+                      {g.month}{t('dashboard.monthSuffix')}
                     </th>
                   ))}
                 </tr>

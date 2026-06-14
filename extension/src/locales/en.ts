@@ -164,7 +164,11 @@ export const en = {
     opPrefix: '[Op] ',
     unknownResource: 'Unknown',
     unknownProject: 'Unknown',
-    mixedRatio: 'Mixed'
+    mixedRatio: 'Mixed',
+    exportSchedule: 'Export Schedule',
+    importSchedule: 'Import Schedule',
+    importConfirmTitle: 'Confirm Schedule Import?',
+    importConfirmDesc: 'This action will clear all existing schedule records and replace them with the imported ones. This cannot be undone.'
   },
   settings: {
     title: 'Settings',
