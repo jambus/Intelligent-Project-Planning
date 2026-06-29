@@ -1,6 +1,6 @@
 export const en = {
   nav: {
-    appTitle: 'Intelligent Resource Planner',
+    appTitle: 'Smart Sprint Planner',
     dashboard: 'Dashboard',
     overview: 'Overview',
     teamCapacity: 'Team Capacity',

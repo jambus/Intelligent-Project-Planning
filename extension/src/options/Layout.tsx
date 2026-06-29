@@ -40,7 +40,7 @@ export const Layout = () => {
             <img src="/icons/icon_128.png" alt="IRP Logo" className="w-8 h-8 rounded-lg shadow-sm" />
             <h1 className="text-xl font-bold text-blue-600 tracking-tight">{t('nav.appTitle')}</h1>
           </div>
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider ml-11">IRP Assistant</p>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider ml-11">Sprint Planner</p>
         </div>
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
           {navItems.map((item) => {

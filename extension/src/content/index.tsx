@@ -4,7 +4,7 @@ import { db } from '../db';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
 import '../index.css';
 
-console.log('Intelligent Resource Planner: Content script injected on Jira.');
+console.log('Smart Sprint Planner: Content script injected on Jira.');
 
 const ContentApp = () => {
   const [loadPercentage, setLoadPercentage] = useState<number | null>(null);

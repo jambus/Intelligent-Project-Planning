@@ -14,7 +14,7 @@ const PopupApp = () => {
       <div className="text-center mb-6 flex flex-col items-center">
         <img src="/icons/icon_128.png" alt="Logo" className="w-12 h-12 rounded-xl shadow-md mb-3" />
         <h2 className="text-lg font-bold text-gray-900 tracking-tight">智能资源排期系统</h2>
-        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">IRP Assistant</p>
+        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Sprint Planner</p>
       </div>
 
       <div className="flex-1 space-y-3">
