@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Intelligent Resource Planner - Customized Edition",
-  "version": "1.0.7",
-  "version_name": "1.0.7CE",
+  "name": "Intelligent Engineering Planner - Customized Edition",
+  "version": "1.0.8",
+  "version_name": "1.0.8CE",
   "description": "AI-powered R&D resource scheduling and workload alert system for project management.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmJ36M+65GKaa+CEn187Jd01Bud51Cf44FJ37mDSzsr6FpS/2w1t8nJiQTnAzKhMBDH6mSt3bPzOR6EfWv/i63xlCmU0ZQpNdqhA5fnXqz6dgxVjQVuzAs0YE53bWIxKv+SwQV6aIpZl8heo0IpB6qiOrNeSQr8oC9Z1mrjQo798cbSb489aIXRjkRucpat8NdNT2R0lGhAQhZqYyPfV8+0afR05JT/gjuEey3irWp+S00egTUvMAi0CQwQL5/kw3q59nOGJ+0S3JiJqlYZlvSGd8JWTcjREOH3T9Sc3eITfDk2OZdE8VoF6je8cgJkzIyFeglvzSV7iePaw4C2/pVwIDAQAB",
   "permissions": [

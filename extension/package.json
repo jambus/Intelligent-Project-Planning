@@ -1,14 +1,14 @@
 {
   "name": "extension",
   "private": true,
-  "version": "1.0.7CE",
+  "version": "1.0.8",
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "zip": "mkdir -p release && cd dist && zip -r ../release/irp-v1.0.7CE.zip .",
-    "publish": "npm run build && npm run zip && npx dotenv-cli -- npx chrome-webstore-upload-cli upload --source release/irp-v1.0.7CE.zip",
+    "zip": "mkdir -p release && cd dist && zip -r ../release/irp-v1.0.8.zip .",
+    "publish": "npm run build && npm run zip && npx dotenv-cli -- npx chrome-webstore-upload-cli upload --source release/irp-v1.0.8.zip",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -29,7 +29,7 @@ export const Layout = () => {
 
   const version = typeof chrome !== 'undefined' && chrome.runtime?.getManifest 
     ? chrome.runtime.getManifest().version 
-    : '1.0.7CE';
+    : '1.0.8';
 
   return (
     <div className="flex h-screen bg-gray-100 font-sans">

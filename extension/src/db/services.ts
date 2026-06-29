@@ -81,3 +81,128 @@ export const deleteProductOperation = async (id: number) => {
   return await db.productOperations.delete(id);
 };
 
+
+import { formatLocalDate, isWorkingDay } from '../utils/dateUtils';
+
+export const updateWeeklyAllocation = async (
+  resourceId: number,
+  projectId: number,
+  weekYear: number,
+  weekNumber: number,
+  newMd: number,
+  workingDaySet?: Set<string>
+) => {
+  const jan4 = new Date(weekYear, 0, 4);
+  const day = jan4.getDay() || 7;
+  const weekStart = new Date(jan4);
+  weekStart.setDate(jan4.getDate() - day + 1 + (weekNumber - 1) * 7);
+  
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  
+  const wStartStr = formatLocalDate(weekStart);
+  const wEndStr = formatLocalDate(weekEnd);
+
+  const allocs = await db.allocations.where({ resourceId }).toArray();
+  const targetAllocs = allocs.filter(a => Number(a.projectId) === projectId);
+    const isRowLocked = targetAllocs.some(a => a.isLocked);
+  
+  const toDelete: number[] = [];
+  const toAdd: any[] = [];
+  
+  let allocationType: 'dev' | 'test' = 'dev';
+
+  for (const alloc of targetAllocs) {
+     if (!alloc.id) continue;
+     
+     if (alloc.endDate < wStartStr || alloc.startDate > wEndStr) {
+       continue;
+     }
+     
+     toDelete.push(alloc.id);
+     allocationType = alloc.allocationType || 'dev';
+     
+     if (alloc.startDate < wStartStr) {
+       const beforeEnd = new Date(weekStart);
+       beforeEnd.setDate(weekStart.getDate() - 1);
+       toAdd.push({
+         ...alloc,
+         id: undefined,
+         endDate: formatLocalDate(beforeEnd)
+       });
+     }
+     
+     if (alloc.endDate > wEndStr) {
+       const afterStart = new Date(weekEnd);
+       afterStart.setDate(weekEnd.getDate() + 1);
+       toAdd.push({
+         ...alloc,
+         id: undefined,
+         startDate: formatLocalDate(afterStart)
+       });
+     }
+  }
+  
+  if (newMd > 0) {
+    let activeDays = 0;
+    const current = new Date(weekStart);
+    while (current <= weekEnd) {
+      const dStr = formatLocalDate(current);
+      if (workingDaySet) {
+        if (workingDaySet.has(dStr)) activeDays++;
+      } else {
+        if (isWorkingDay(current)) activeDays++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    
+    if (activeDays > 0) {
+      const percentage = Math.round((newMd / activeDays) * 100);
+      toAdd.push({
+        resourceId,
+        projectId,
+        startDate: wStartStr,
+        endDate: wEndStr,
+        allocationPercentage: percentage,
+        isLocked: isRowLocked,
+        allocationType
+      });
+    }
+  }
+  
+  await db.transaction('rw', db.allocations, async () => {
+    if (toDelete.length > 0) {
+      await db.allocations.bulkDelete(toDelete);
+    }
+    if (toAdd.length > 0) {
+      await db.allocations.bulkAdd(toAdd);
+    }
+  });
+};
+
+export const transferAllocations = async (oldResourceId: number, newResourceId: number, projectId: number) => {
+  await db.transaction('rw', db.allocations, async () => {
+    const allocs = await db.allocations.where({ resourceId: oldResourceId }).toArray();
+    const targetAllocs = allocs.filter(a => Number(a.projectId) === projectId);
+    
+    for (const alloc of targetAllocs) {
+      if (alloc.id) {
+        await db.allocations.update(alloc.id, { resourceId: newResourceId });
+      }
+    }
+  });
+};
+
+
+export const toggleRowLock = async (resourceId: number, projectId: number, isLocked: boolean) => {
+  await db.transaction('rw', db.allocations, async () => {
+    const allocs = await db.allocations.where({ resourceId }).toArray();
+    const targetAllocs = allocs.filter(a => Number(a.projectId) === projectId);
+    
+    for (const alloc of targetAllocs) {
+      if (alloc.id) {
+        await db.allocations.update(alloc.id, { isLocked });
+      }
+    }
+  });
+};
