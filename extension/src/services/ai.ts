@@ -31,8 +31,8 @@ CRITICAL INSTRUCTIONS:
 6. NO WASTE: Leaving a resource with idleMd > 0 when projects still have gaps is a FAILURE. 
 7. {{skillRule}}
 8. Phase rules:
-   - If phase is 'dev', only assign Developers (前端/后端/APP/全栈).
-   - If phase is 'test', only assign Testers (测试工程师). Testing can start as early as the same day as development, but MUST NOT start before development.
+   - If phase is 'dev', only assign Developers (前端/后端/APP/全栈/开发组长).
+   - If phase is 'test', only assign Testers (测试工程师/测试组长). Testing can start as early as the same day as development, but MUST NOT start before development.
 9. Provide "allocatedMd" (integer >= 1) and "allocationPercentage".
 
 Return ONLY a JSON Array with this exact format (do not wrap in markdown blocks, raw JSON only):

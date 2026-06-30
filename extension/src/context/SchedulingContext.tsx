@@ -361,13 +361,17 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             const allocateOpForMonth = async (targetMd: number, phase: 'dev' | 'test') => {
               let remainingMd = targetMd;
               const phaseCandidates = candidates.filter(r => {
-                if (phase === 'dev') return ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role);
-                return r.role === '测试工程师';
+                if (phase === 'dev') return ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师', '开发组长'].includes(r.role);
+                return ['测试工程师', '测试组长'].includes(r.role);
               });
 
-              // Two-pass: non-leaders first, leaders only as fallback
-              const nonLeads = phaseCandidates.filter(r => !leads.has(r.name));
-              const leadOnly = phaseCandidates.filter(r => leads.has(r.name));
+              // Three-pass priority: (1) regular engineers (non-lead, non-组长)
+              // (2) project leaders (Tech Lead / QA Responsible) that are not 组长
+              // (3) 开发组长/测试组长 — last resort (protect for project scheduling)
+              const CHIEF_ROLES = ['开发组长', '测试组长'];
+              const regularPool = phaseCandidates.filter(r => !leads.has(r.name) && !CHIEF_ROLES.includes(r.role));
+              const leadPool = phaseCandidates.filter(r => leads.has(r.name) && !CHIEF_ROLES.includes(r.role));
+              const chiefPool = phaseCandidates.filter(r => CHIEF_ROLES.includes(r.role));
 
               const allocateFromPool = async (pool: typeof phaseCandidates) => {
                 for (const res of pool) {
@@ -411,10 +415,12 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
                 }
               };
 
-              // Pass 1: fill from non-leaders
-              await allocateFromPool(nonLeads);
-              // Pass 2: leaders only if non-leaders couldn't cover it
-              if (remainingMd >= 0.5) await allocateFromPool(leadOnly);
+              // Pass 1: fill from regular engineers
+              await allocateFromPool(regularPool);
+              // Pass 2: project leaders if regular engineers couldn't cover it
+              if (remainingMd >= 0.5) await allocateFromPool(leadPool);
+              // Pass 3: 开发组长/测试组长 only as last resort
+              if (remainingMd >= 0.5) await allocateFromPool(chiefPool);
             };
 
             if (targetDevMd > 0) await allocateOpForMonth(targetDevMd, 'dev');
@@ -442,9 +448,9 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           schedulingStrategy: p.schedulingStrategy,
           allowedResourceIds: computeAllowedResourceIds(p, false)
         })).filter(p => p.gap >= 1);
-        if (bDev.length && dIdle.some(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role))) {
+        if (bDev.length && dIdle.some(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师', '开发组长'].includes(r.role))) {
           const batchAllowedIds = new Set(bDev.flatMap(p => p.allowedResourceIds));
-          const filteredIdle = dIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role) && batchAllowedIds.has(Number(r.id)));
+          const filteredIdle = dIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师', '开发组长'].includes(r.role) && batchAllowedIds.has(Number(r.id)));
           if (filteredIdle.length > 0) {
             const sug = await suggestAllocationsForBatch(bDev as any, filteredIdle, 'dev', false, signal);
             checkStop();
@@ -461,9 +467,9 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           schedulingStrategy: p.schedulingStrategy,
           allowedResourceIds: computeAllowedResourceIds(p, false)
         })).filter(p => p.gap >= 1);
-        if (bTest.length && tIdle.some(r => r.role === '测试工程师')) {
+        if (bTest.length && tIdle.some(r => ['测试工程师', '测试组长'].includes(r.role))) {
           const batchAllowedIds = new Set(bTest.flatMap(p => p.allowedResourceIds));
-          const filteredIdle = tIdle.filter(r => r.role === '测试工程师' && batchAllowedIds.has(Number(r.id)));
+          const filteredIdle = tIdle.filter(r => ['测试工程师', '测试组长'].includes(r.role) && batchAllowedIds.has(Number(r.id)));
           if (filteredIdle.length > 0) {
             const sug = await suggestAllocationsForBatch(bTest as any, filteredIdle, 'test', false, signal);
             checkStop();
@@ -530,7 +536,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             allowedResourceIds: p ? computeAllowedResourceIds(p, true) : resources.map(r => r.id!)
           };
         }).filter(g => g.gap >= 1);
-        const devI = hIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role));
+        const devI = hIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师', '开发组长'].includes(r.role));
         if (devG.length && devI.length) {
           const batchAllowedIds = new Set(devG.flatMap(p => p.allowedResourceIds));
           const filteredIdle = devI.filter(r => batchAllowedIds.has(Number(r.id)));
@@ -553,7 +559,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             allowedResourceIds: p ? computeAllowedResourceIds(p, true) : resources.map(r => r.id!)
           };
         }).filter(g => g.gap >= 1);
-        const testI = hIdle2.filter(r => r.role === '测试工程师');
+        const testI = hIdle2.filter(r => ['测试工程师', '测试组长'].includes(r.role));
         if (testG.length && testI.length) {
           const batchAllowedIds = new Set(testG.flatMap(p => p.allowedResourceIds));
           const filteredIdle = testI.filter(r => batchAllowedIds.has(Number(r.id)));
@@ -582,7 +588,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
               const r = resources.find(x => x.id === rId);
               const rI = finalIdle.find(x => x.id === rId);
               if (r && rI) {
-                if (r.role === '测试工程师') testIdle += rI.idleMd;
+                if (['测试工程师', '测试组长'].includes(r.role)) testIdle += rI.idleMd;
                 else devIdle += rI.idleMd;
               }
             });

@@ -112,8 +112,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         totalCapacityMd += r.capacityMd;
         allocatedMd += r.allocatedMd;
         idleMd += r.idleMd;
-        if (['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)) devIdleMd += r.idleMd;
-        else if (r.role === '测试工程师') testIdleMd += r.idleMd;
+        if (['前端工程师', '后端工程师', 'APP工程师', '全栈工程师', '开发组长'].includes(r.role)) devIdleMd += r.idleMd;
+        else if (['测试工程师', '测试组长'].includes(r.role)) testIdleMd += r.idleMd;
       });
 
       return {
@@ -128,8 +128,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
       let totalCapacityMd = 0; let allocatedMd = 0; let idleMd = 0; let devIdleMd = 0; let testIdleMd = 0;
       unassignedResources.forEach(r => {
         totalCapacityMd += r.capacityMd; allocatedMd += r.allocatedMd; idleMd += r.idleMd;
-        if (['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role)) devIdleMd += r.idleMd;
-        else if (r.role === '测试工程师') testIdleMd += r.idleMd;
+        if (['前端工程师', '后端工程师', 'APP工程师', '全栈工程师', '开发组长'].includes(r.role)) devIdleMd += r.idleMd;
+        else if (['测试工程师', '测试组长'].includes(r.role)) testIdleMd += r.idleMd;
       });
       teamCapacities.push({
         id: -1, name: '未分配 Scrum 团队', totalCapacityMd, allocatedMd, idleMd, devIdleMd, testIdleMd,
@@ -164,11 +164,11 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
       const pAllocs = allocations.filter(a => Number(a.projectId) === Number(p.id));
       const devs = Array.from(new Set(pAllocs.filter(a => {
         const res = resources.find(r => Number(r.id) === Number(a.resourceId));
-        return a.allocationType === 'dev' || (res && ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(res.role));
+        return a.allocationType === 'dev' || (res && ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师', '开发组长'].includes(res.role));
       }).map(a => resources.find(r => r.id === a.resourceId)?.name))).filter(Boolean);
       const testers = Array.from(new Set(pAllocs.filter(a => {
         const res = resources.find(r => Number(r.id) === Number(a.resourceId));
-        return a.allocationType === 'test' || (res && res.role === '测试工程师');
+        return a.allocationType === 'test' || (res && ['测试工程师', '测试组长'].includes(res.role));
       }).map(a => resources.find(r => r.id === a.resourceId)?.name))).filter(Boolean);
       
       const devViaJira = p.devTotalMd > 0 && devs.length === 0 && Math.ceil(g.devGap) < 1;

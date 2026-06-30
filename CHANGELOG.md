@@ -18,7 +18,8 @@
 - **可用窗口简化**：`getAvailableWindows` 仅标记完全空闲日为可用，摘要不再显示百分比。
 
 ### 运维 Leader 保护 (Ops Leader Protection)
-- **两阶段运维分配**：`allocateOpForMonth` 重构为先从非 Leader 成员中分配运维人天，仅当普通资源无法覆盖当月需求时才将 Leader（项目 Tech Lead / QA Responsible）纳入候选池兜底，最大限度保留 Leader 的项目排期可用性。
+- **新增角色**：新增"开发组长"和"测试组长"两个角色，分别归属开发力量和测试力量。
+- **三阶段运维分配**：`allocateOpForMonth` 采用三级优先级——(1) 普通工程师优先承接运维；(2) 项目负责人（Tech Lead / QA Responsible）次之；(3) 开发组长/测试组长仅作最后兆底，最大限度保留组长的项目排期可用性。
 
 
 ## [1.0.8] - 2026-06-15

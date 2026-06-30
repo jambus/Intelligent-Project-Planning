@@ -38,7 +38,7 @@ For build/setup details: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 
 ## Conventions
 
-- **Language**: UI labels, role names, and comments are in Chinese. Roles: 前端/后端/APP/全栈/测试工程师
+- **Language**: UI labels, role names, and comments are in Chinese. Roles: 前端/后端/APP/全栈/开发组长/测试工程师/测试组长
 - **TypeScript strict mode**: `noUnusedLocals`, `noUnusedParameters` — unused imports/vars fail the build
 - **Dexie schema changes**: Must increment version number AND redefine all tables in the new version block
 - **API keys**: Never hardcoded — always via `chrome.storage.local`. Never log secrets.
