@@ -182,8 +182,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         'no_dev_capacity': '开发容量不足',
         'no_test_capacity': '测试容量不足',
         'date_window_exceeded': '时间窗口不足',
-        'weekly_exclusivity_conflict': '单周并行冲突',
-        'scrum_constraint_violated': '指定团队容量不足'
+        'scrum_constraint_violated': '指定团队容量不足',
+        'partial_window': '跨窗口部分排期'
       };
 
       let reason = '';

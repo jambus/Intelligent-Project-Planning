@@ -28,6 +28,12 @@ export const DashboardOverview = () => {
   const yearOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
 
+  // Capacity vs Demand diagnostic (#30.5)
+  const totalDemandMd = readyProjects.reduce((s, p) => s + (p.devTotalMd || 0) + (p.testTotalMd || 0), 0);
+  const totalCapacityMd = teamCapacities.reduce((s, tc) => s + tc.totalCapacityMd, 0);
+  const demandRatio = totalCapacityMd > 0 ? totalDemandMd / totalCapacityMd : 0;
+  const projectsExceedingWindow = readyProjects.filter(p => p.endDate && p.endDate > `${selectedYear}-${String(endMonth).padStart(2, '0')}-31`).length;
+
 
 
   return (
@@ -178,6 +184,21 @@ export const DashboardOverview = () => {
           <p className={`text-2xl font-black ${resourceIdle.length ? 'text-indigo-600' : 'text-gray-900'}`}>{resourceIdle.length}</p>
         </div>
       </div>
+
+      {/* Capacity Warning Banner (#30.5) */}
+      {totalDemandMd > 0 && (demandRatio > 1 || projectsExceedingWindow > 0) && (
+        <div className={`p-4 rounded-xl border text-sm ${demandRatio > 1 ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
+          <div className="flex items-center space-x-2 mb-1">
+            <AlertTriangle size={14} className={demandRatio > 1 ? 'text-amber-500' : 'text-blue-500'} />
+            <span className="font-bold text-gray-900">{t('dashboard.capacityWarningTitle')}</span>
+          </div>
+          <div className="text-xs text-gray-600 space-y-0.5">
+            <p>{t('dashboard.capacityDemand')}: <span className="font-mono font-bold">{Math.round(totalDemandMd)}</span> MD &nbsp;|&nbsp; {t('dashboard.capacityAvailable')}: <span className="font-mono font-bold">{Math.round(totalCapacityMd)}</span> MD &nbsp;({startMonth}{t('dashboard.monthSuffix')}~{endMonth}{t('dashboard.monthSuffix')})</p>
+            {demandRatio > 1 && <p className="text-amber-700">{t('dashboard.capacityOverload').replace('{pct}', ((demandRatio - 1) * 100).toFixed(0))}</p>}
+            {projectsExceedingWindow > 0 && <p className="text-blue-700">{t('dashboard.capacityBeyondWindow').replace('{count}', String(projectsExceedingWindow))}</p>}
+          </div>
+        </div>
+      )}
 
       {/* Scrum Team Capacities Box */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mt-8">

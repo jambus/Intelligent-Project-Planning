@@ -45,7 +45,8 @@ For build/setup details: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 - **Jira sync**: `syncEpicLoggedHours()` in `services/jira.ts` must receive ALL epic keys in one batch call (not per-project). The JQL uses `project in (...)`, wildcard `*`, and `created >= -365d` — do not remove any of these.
 - **Priority = insertion order**: Project priority determined by auto-increment DB ID (CSV import order). No manual sort.
 - **Working days**: Holidays hardcoded in `utils/dateUtils.ts` for 2026 — requires annual maintenance.
-- **AI scheduling**: Called per-project sequentially. JS enforces hard caps via `Math.min(aiSuggestion, projectGap, resourceIdle)`.
+- **AI scheduling**: Called per-project sequentially. JS enforces hard caps via `Math.min(aiSuggestion, projectGap, resourceIdle)`. **One task per day** — each person can only work on one task (ops or project) per day; weekly schedule values are always integers (no decimals). Multiple projects CAN share a week (different days), but never share a single day.
+- **Fuzzy dates**: CSV import normalizes informal date strings ("Apr", "Q3", "Jun (UAT...)") to ISO dates via `normalizeDateField()` in `fileImport.ts`.
 - **Styling**: Tailwind CSS utility classes. No separate CSS modules.
 - **Icons**: Lucide React (`lucide-react` package).
 
