@@ -348,13 +348,6 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           
           // Find candidate resources matching the product name
           const candidates = resources.filter(r => r.skills?.includes(op.productName));
-          
-          // Sort candidates: Non-leads first
-          candidates.sort((a, b) => {
-            const aIsLead = leads.has(a.name) ? 1 : 0;
-            const bIsLead = leads.has(b.name) ? 1 : 0;
-            return aIsLead - bIsLead;
-          });
 
           for (let m = startMonth; m <= endMonth; m++) {
             const targetDevMd = op.monthlyDevMd;
@@ -372,45 +365,56 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
                 return r.role === '测试工程师';
               });
 
-              for (const res of phaseCandidates) {
-                if (remainingMd < 0.5) break;
+              // Two-pass: non-leaders first, leaders only as fallback
+              const nonLeads = phaseCandidates.filter(r => !leads.has(r.name));
+              const leadOnly = phaseCandidates.filter(r => leads.has(r.name));
 
-                const dailyCap = res.capacity || 100;
-                const mdPerDay = dailyCap / 100;
-                if (mdPerDay <= 0) continue;
-
-                const resCalendar = getResourceCalendar(res, currentAllocations);
-                // One task per day: ops always occupies full working days.
-                const monthSlots = resCalendar
-                  .filter(s => s.date >= monthStart && s.date <= monthEnd && s.available >= dailyCap)
-                  .sort((a, b) => a.date.localeCompare(b.date));
-                if (monthSlots.length === 0) continue;
-
-                const daysNeeded = Math.min(Math.ceil(remainingMd / mdPerDay), monthSlots.length);
-                if (daysNeeded < 1) continue;
-
-                // Spread days evenly across the month to avoid clustering
-                const step = monthSlots.length / daysNeeded;
-                for (let i = 0; i < daysNeeded; i++) {
+              const allocateFromPool = async (pool: typeof phaseCandidates) => {
+                for (const res of pool) {
                   if (remainingMd < 0.5) break;
-                  const slot = monthSlots[Math.floor(i * step)];
-                  const allocToSave = {
-                    resourceId: res.id!,
-                    projectId: -(op.id! + 1000000),
-                    allocationPercentage: dailyCap,
-                    startDate: slot.date,
-                    endDate: slot.date,
-                    allocationType: phase
-                  };
-                  currentAllocations.push(allocToSave);
-                  await db.allocations.add({
-                    ...allocToSave,
-                    allocationPercentage: Math.round(dailyCap)
-                  } as any);
-                  updateResourceCalendar(res.id!, allocToSave);
-                  remainingMd -= mdPerDay;
+
+                  const dailyCap = res.capacity || 100;
+                  const mdPerDay = dailyCap / 100;
+                  if (mdPerDay <= 0) continue;
+
+                  const resCalendar = getResourceCalendar(res, currentAllocations);
+                  // One task per day: ops always occupies full working days.
+                  const monthSlots = resCalendar
+                    .filter(s => s.date >= monthStart && s.date <= monthEnd && s.available >= dailyCap)
+                    .sort((a, b) => a.date.localeCompare(b.date));
+                  if (monthSlots.length === 0) continue;
+
+                  const daysNeeded = Math.min(Math.ceil(remainingMd / mdPerDay), monthSlots.length);
+                  if (daysNeeded < 1) continue;
+
+                  // Spread days evenly across the month to avoid clustering
+                  const step = monthSlots.length / daysNeeded;
+                  for (let i = 0; i < daysNeeded; i++) {
+                    if (remainingMd < 0.5) break;
+                    const slot = monthSlots[Math.floor(i * step)];
+                    const allocToSave = {
+                      resourceId: res.id!,
+                      projectId: -(op.id! + 1000000),
+                      allocationPercentage: dailyCap,
+                      startDate: slot.date,
+                      endDate: slot.date,
+                      allocationType: phase
+                    };
+                    currentAllocations.push(allocToSave);
+                    await db.allocations.add({
+                      ...allocToSave,
+                      allocationPercentage: Math.round(dailyCap)
+                    } as any);
+                    updateResourceCalendar(res.id!, allocToSave);
+                    remainingMd -= mdPerDay;
+                  }
                 }
-              }
+              };
+
+              // Pass 1: fill from non-leaders
+              await allocateFromPool(nonLeads);
+              // Pass 2: leaders only if non-leaders couldn't cover it
+              if (remainingMd >= 0.5) await allocateFromPool(leadOnly);
             };
 
             if (targetDevMd > 0) await allocateOpForMonth(targetDevMd, 'dev');
