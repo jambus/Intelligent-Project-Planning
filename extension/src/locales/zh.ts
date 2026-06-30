@@ -86,7 +86,14 @@ export const zh = {
     title: 'Jira 数据同步',
     desc: '从 Jira 拉取 Epic 及其子任务已记录的实际工时 (Timespent)，用于排期抵扣',
     syncSelected: '同步选中项目 ({count})',
-    syncing: '正在同步...'
+    syncing: '正在同步...',
+    recentSyncConfirm: '有 {count} 个项目在 30 分钟内已经同步过，频繁同步可能会触发 Jira API 限制。是否继续强制同步？',
+    authErrorTitle: '未登录 Jira',
+    authErrorEmpty: '所有项目均未获取到任何数据，可能是因为您尚未登录 Jira 或登录态已失效。',
+    authErrorEmptyDetails: '请在新标签页中打开 Jira 并登录后再尝试同步。如果您配置了 API Token，请检查 Token 是否有效。\n\n如果确认已登录，请检查 Epic Key 是否正确以及是否有登记工时。',
+    authErrorMessage: '检测到您尚未登录 Jira，或登录态已失效。请先登录 Jira 然后再尝试同步。',
+    authErrorDetails: '请在新标签页中打开 Jira 并登录。如果您配置了 API Token，请检查 Token 是否有效。',
+    noEpicData: '未获取到该 Epic 的工时数据（请检查 Epic Key 是否正确或是否有登记工时）'
   },
   dashboard: {
     overviewTitle: '全局概览',

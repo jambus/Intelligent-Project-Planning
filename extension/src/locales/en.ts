@@ -86,7 +86,14 @@ export const en = {
     title: 'Jira Data Sync',
     desc: 'Pull logged timespent of Epics and their subtasks from Jira for scheduling deduction',
     syncSelected: 'Sync Selected ({count})',
-    syncing: 'Syncing...'
+    syncing: 'Syncing...',
+    recentSyncConfirm: '{count} project(s) were synced within the last 30 minutes. Frequent syncing may trigger Jira API rate limits. Continue anyway?',
+    authErrorTitle: 'Not Logged In to Jira',
+    authErrorEmpty: 'No data was retrieved for any project. You may not be logged in to Jira or your session has expired.',
+    authErrorEmptyDetails: 'Please open Jira in a new tab and log in, then try syncing again. If you configured an API Token, please verify it is still valid.\n\nIf you are sure you are logged in, check that the Epic Keys are correct and have logged time.',
+    authErrorMessage: 'You are not logged in to Jira, or your session has expired. Please log in first.',
+    authErrorDetails: 'Please open Jira in a new tab and log in. If you configured an API Token, please verify it is still valid.',
+    noEpicData: 'No timesheet data found for this Epic (check Epic Key or whether any time has been logged)'
   },
   dashboard: {
     overviewTitle: 'Overview',

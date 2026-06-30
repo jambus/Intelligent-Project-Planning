@@ -2,6 +2,10 @@
 
 ## [1.0.9] - 2026-06-30
 
+### Jira 同步空数据登录检测 (Jira Sync Empty-Data Auth Detection)
+- **[30.7] 数据级登录态检测**：当 Jira 同步完成后所有项目返回全零数据（工时、状态、子任务数均为空）时，判定为登录态失效，阻断写入并弹窗提醒用户先登录 Jira，避免将无效零值覆盖数据库中的历史数据。
+- **[30.8] Jira 同步消息 i18n**：将 Jira 同步相关的所有硬编码中文提示（认证错误、重复同步确认、Epic 无数据等）全部迁移至 i18n 国际化体系，支持中英文双语切换。
+
 ### 排期引擎利用率优化 (Scheduling Engine Utilization Optimization)
 - **[30.1] 移除周独占约束**：彻底移除"单人单周只排一个项目"的限制（`weekly_exclusivity_conflict`），同一人可同周服务多项目（不同天）。日级约束为每天只能执行一个任务。
 - **[30.2] 模糊日期解析**：CSV 导入新增 `normalizeDateField()` 函数，自动将 "Apr"、"Q3"、"March"、"Jun (UAT done...)" 等模糊日期转换为 ISO 格式。startDate 取月首日，endDate 取月末日。
