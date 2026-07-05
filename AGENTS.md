@@ -33,7 +33,7 @@ Key directories under `extension/src/`:
 | `content/` | Jira page content script (load alerts) |
 | `background/` | Service worker (minimal) |
 
-For full PRD and architecture: [docs/intelligent-resource-planner.md](docs/intelligent-resource-planner.md)  
+For full PRD and architecture: [docs/requirement.md](docs/requirement.md)  
 For build/setup details: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 
 ## Conventions
@@ -60,7 +60,7 @@ For build/setup details: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 - **Gap calculation**: `runAudit` (engine) and `runAuditForUI` (Dashboard) share `computeProjectGaps` in `utils/audit.ts`. Keep MD accumulation at full float precision; round only at final write/display.
 - **Imports are destructive**: project/resource file import does `db.<table>.clear()` then `bulkAdd` — it REPLACES the whole table. UI must confirm before import when data exists.
 - **Cascade deletes**: `deleteResource`/`deleteProject` also delete related `allocations` to avoid orphan schedule rows. Preserve this when editing the service layer.
-- **PRD doc is UTF-8 with very long lines**: the buffer-based edit tools may read a stale/empty view of `docs/intelligent-resource-planner.md`. Verify against disk if an edit fails to match.
+- **PRD doc is UTF-8 with very long lines**: the buffer-based edit tools may read a stale/empty view of `docs/requirement.md`. Verify against disk if an edit fails to match.
 
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.

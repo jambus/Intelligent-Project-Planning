@@ -54,7 +54,7 @@
     - [x] 6.3.2 动态计算精确的起止日期，落库并扣减池子余额。
 - [x] **DONE** 6.4 **交互与文档同步 (UI & Docs)**
     - [x] 6.4.1 更新大盘排期按钮的 Loading 状态，展示「正在处理项目 X...」的进度流。
-    - [x] 6.4.2 更新 `docs/intelligent-resource-planner.md` 的架构设计图与逻辑说明。
+    - [x] 6.4.2 更新 `docs/requirement.md` 的架构设计图与逻辑说明。
 
 ## 阶段七：AI 排期精准度与资源利用率优化 (Phase 7: AI Scheduling Precision & Resource Optimization)
 
@@ -229,7 +229,7 @@
 
 ## 阶段二十：调度引擎性能与准确性优化 (Phase 20: Scheduling Engine Optimization)
 
-> 来源：2026-05-09 代码审查，关联架构文档：`docs/intelligent-resource-planner.md § 3.3.8`
+> 来源：2026-05-09 代码审查，关联架构文档：`docs/requirement.md § 3.3.8`
 
 ### P0 — 立即执行（性能，直接影响使用体验）
 
@@ -314,7 +314,7 @@
 ### P2 — 文档归档 (Docs)
 
 - [x] **DONE** **21.5 [DOC-01] 更新 PRD 与 Changelog**
-    - [x] 21.5.1 同步 3.3.9 和 3.3.10 章节至 `intelligent-resource-planner.md`。
+    - [x] 21.5.1 同步 3.3.9 和 3.3.10 章节至 `requirement.md`。
     - [x] 21.5.2 更新 `CHANGELOG.md` 归档 v1.0.3 变更。
 
 ## 阶段二十二：v1.0.4 迭代开启 (Phase 22: Version 1.0.4 Initialization)
@@ -344,7 +344,7 @@
     - [x] 23.3.1 更新 `SchedulingContext.tsx`，在计算 `devGap` 和 `testGap` 时动态扣减已录入工时。
     - [x] 23.3.2 同样更新大盘仪表盘 (`Dashboard.tsx`)，让可视化审计表也能反映净缺口。
 - [x] **DONE** **23.4 [DOC-01] 文档归档**
-    - [x] 23.4.1 更新 `intelligent-resource-planner.md` 的 3.3.12 章节。
+    - [x] 23.4.1 更新 `requirement.md` 的 3.3.12 章节。
     - [x] 23.4.2 更新 `CHANGELOG.md` 补充新特性。
 
 ## 阶段二十四：Jira 同步范围时间窗口限制 (Phase 24: Jira Sync Time Window Restriction)
@@ -354,11 +354,11 @@
 - [x] **DONE** **24.1 [JIRA-04] Epic 创建时间过去一年限制**
     - [x] 24.1.1 在 `services/jira.ts` 的模糊搜索 JQL 中已添加 `created >= -365d` 的限制（第 124-126 行）。当前架构已统一为模糊搜索路径（所有 Epic Key 均通过 `summary ~ "key*"` 查询），不再区分 `standardKeys` 和 `fuzzyNames` 两条路径。
     - [x] 24.1.2 编译验证通过。
-    - [x] 24.1.3 PRD `docs/intelligent-resource-planner.md` § 3.3.12 第 6 条已包含此功能说明。
+    - [x] 24.1.3 PRD `docs/requirement.md` § 3.3.12 第 6 条已包含此功能说明。
 
 ## 阶段二十五：Jira 工时扣减与排期逻辑优化 (Phase 25: Jira Hours Deduction & Scheduling Logic Enhancement)
 
-> 来源：2026-05-24 代码审计，关联架构文档：`docs/intelligent-resource-planner.md § 3.3.12`
+> 来源：2026-05-24 代码审计，关联架构文档：`docs/requirement.md § 3.3.12`
 
 ### P0 — 已完成功能归档 (Completed Features Archive)
 
@@ -427,7 +427,7 @@
 
 ## 阶段二十八：v1.0.5 排期精准度与健壮性加固 (Phase 28: Precision & Robustness Hardening)
 
-> 来源：2026-05 排期逻辑代码审查，关联架构文档：`docs/intelligent-resource-planner.md § 3.3.13`
+> 来源：2026-05 排期逻辑代码审查，关联架构文档：`docs/requirement.md § 3.3.13`
 
 ### P0 — 核心引擎精准度 (Core Engine Precision)
 
@@ -526,7 +526,7 @@
     - [x] 29.8.2 手动验证：排期 → 导出 → 手工编辑 → 导入 → 结果一致。
 
 - [x] **29.9 [DOC-01] 文档更新**
-    - [x] 29.9.1 更新 `docs/intelligent-resource-planner.md` 新增导出/导入章节。
+    - [x] 29.9.1 更新 `docs/requirement.md` 新增导出/导入章节。
     - [x] 29.9.2 更新 `CHANGELOG.md`。
 ### 新增特性 (v1.0.9 - 排期矩阵在线编辑)
 - [x] **排期矩阵在线手工编辑**

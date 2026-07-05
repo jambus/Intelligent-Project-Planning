@@ -42,4 +42,4 @@ Chrome Extension (Manifest V3) — Local-first R&D resource scheduler with AI-po
 Every code modification MUST be followed by `npm run build` succeeding. The task is not complete until the build and packaging pass.
 
 ### Single Source of Truth
-`docs/intelligent-resource-planner.md` contains the PRD and architecture. Update it when adding features or changing design.
+`docs/requirement.md` contains the PRD and architecture. Update it when adding features or changing design.
