@@ -1,4 +1,4 @@
-# 智能研发资源排期系统 (Intelligent Resource Planner) - 规划文档
+# 智能研发资源排期系统 (Smart Sprint Planner) - 规划文档
 
 **⚠️ 架构与设计维护说明 (For AI Agents):**
 > 任何关于本项目的功能变更、架构调整（如更换数据源、修改核心业务流程）都**必须**同步更新至本文档，确保它始终作为项目设计的 Single Source of Truth。

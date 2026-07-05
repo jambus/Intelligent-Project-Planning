@@ -1,8 +1,8 @@
-# Privacy Policy for Intelligent Resource Planner (IRP)
+# Privacy Policy for Smart Sprint Planner
 
 **Last Updated: April 26, 2026**
 
-This Privacy Policy describes how the **Intelligent Resource Planner** ("the Extension", "we", "us", or "our") handles your data. We are committed to protecting your privacy and ensuring that your data remains under your control.
+This Privacy Policy describes how the **Smart Sprint Planner** ("the Extension", "we", "us", or "our") handles your data. We are committed to protecting your privacy and ensuring that your data remains under your control.
 
 ## 1. Data Collection and Storage (Local-First)
 The Extension is designed with a **local-first** architecture.

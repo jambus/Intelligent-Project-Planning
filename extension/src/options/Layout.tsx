@@ -37,7 +37,7 @@ export const Layout = () => {
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3 mb-1">
-            <img src="/icons/icon_128.png" alt="IRP Logo" className="w-8 h-8 rounded-lg shadow-sm" />
+            <img src="/icons/icon_128.png" alt="Smart Sprint Planner Logo" className="w-8 h-8 rounded-lg shadow-sm" />
             <h1 className="text-xl font-bold text-blue-600 tracking-tight">{t('nav.appTitle')}</h1>
           </div>
           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider ml-11">Sprint Planner</p>

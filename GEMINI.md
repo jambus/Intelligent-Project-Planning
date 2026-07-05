@@ -1,7 +1,7 @@
-# GEMINI.md - Intelligent Resource Planner (AI-Powered)
+# GEMINI.md - Smart Sprint Planner (AI-Powered)
 
 ## Project Context
-The **Intelligent Resource Planner (IRP)** is a Local-first Chrome Extension for R&D resource scheduling using AI.
+The **Smart Sprint Planner (SSP)** is a Local-first Chrome Extension for R&D resource scheduling using AI.
 - **Primary Docs**: `docs/intelligent-resource-planner.md` (PRD/Arch).
 - **Setup/Build**: `docs/DEVELOPMENT.md`.
 

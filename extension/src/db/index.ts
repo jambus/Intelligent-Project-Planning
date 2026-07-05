@@ -100,7 +100,7 @@ export class PlannerDatabase extends Dexie {
   scrumTeams!: Table<ScrumTeam, number>;
 
   constructor() {
-    super('IntelligentResourcePlannerDB');
+    super('SmartSprintPlannerDB');
     this.version(1).stores({
       resources: '++id, name, role',
       projects: '++id, jiraProjectId, jiraProjectKey, status, priority',
