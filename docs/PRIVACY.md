@@ -1,6 +1,6 @@
 # Privacy Policy for Smart Sprint Planner
 
-**Last Updated: April 26, 2026**
+**Last Updated: July 5, 2026**
 
 This Privacy Policy describes how the **Smart Sprint Planner** ("the Extension", "we", "us", or "our") handles your data. We are committed to protecting your privacy and ensuring that your data remains under your control.
 
