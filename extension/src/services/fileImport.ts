@@ -1,14 +1,8 @@
 import * as XLSX from 'xlsx';
 import { db } from '../db';
 
-const priorityWeight: Record<string, number> = {
-  'High': 3, 'Medium': 2, 'Low': 1,
-  '高': 3, '中': 2, '低': 1,
-  'P0': 4, 'P1': 3, 'P2': 2, 'P3': 1,
-  'Must Win': 5, 'Compliance': 4
-};
 
-const getPriorityWeight = (p: string) => priorityWeight[p] || 0;
+
 
 // --- Fuzzy date normalizer ---
 // Converts informal date strings ("Apr", "Q3", "March", "Jun (UAT done...)")
@@ -138,16 +132,6 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
         const priorityStr = idxPriority !== -1 ? row[idxPriority]?.toString() || 'Medium' : 'Medium';
         const devTotalMd = idxDevMd !== -1 ? Number(row[idxDevMd]) || 0 : 0;
         const testTotalMd = idxTestMd !== -1 ? Number(row[idxTestMd]) || 0 : 0;
-        const isHighPriority = getPriorityWeight(priorityStr) >= 3;
-        // User specified: Dev MD <= 10 means single mode (focused).
-        // High priority and Dev MD > 10 means balanced.
-        // Others (e.g. low priority and Dev MD > 10) also fallback to focused.
-        const isLargeDevProject = devTotalMd > 10; 
-        
-        let defaultStrategy: 'balanced' | 'focused' | 'urgent' = 'focused';
-        if (isHighPriority && isLargeDevProject) {
-          defaultStrategy = 'balanced';
-        }
         
         const rawScrumName = idxScrum !== -1 ? row[idxScrum]?.toString().trim() || '' : '';
         const scrumTeamId = rawScrumName ? scrumMap.get(rawScrumName.toLowerCase()) : undefined;
@@ -181,7 +165,6 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
           detailsProductTestMd: idxDetailsTestMd !== -1 ? row[idxDetailsTestMd]?.toString() || '' : '',
           techStack: idxTechStack !== -1 ? row[idxTechStack]?.toString() || '' : '',
           domain: idxDomain !== -1 ? row[idxDomain]?.toString() || '' : '',
-          schedulingStrategy: defaultStrategy,
           ...(scrumTeamId ? { scrumTeamId } : {}),
           teamSchedulingMode,
         };
