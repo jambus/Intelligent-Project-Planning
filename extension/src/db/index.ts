@@ -45,7 +45,6 @@ export interface Project {
   detailsProductTestMd?: string; // Details Product Test MD
   techStack?: string; // Technical Stack required
   domain?: string; // Product Domain
-  schedulingStrategy?: 'balanced' | 'focused' | 'urgent'; // Strategy for AI allocation
   scrumTeamId?: number; // Primary Scrum Team for the project
   teamSchedulingMode?: 'team-first' | 'cross-team' | 'all-in'; // Constraint mode
   rejectionReason?: string; // Reason why the project could not be fully scheduled

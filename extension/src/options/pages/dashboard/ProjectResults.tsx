@@ -11,6 +11,13 @@ export const ProjectResults = () => {
 
   const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'fully'>('pending');
 
+  // Constraint diagnostics (#30.6) — count rejection reasons
+  const constraintCounts = [...unscheduledProjects, ...partiallyScheduledProjects].reduce((acc, p) => {
+    const r = p.unscheduledReason || t('dashboard.reasonUnknown');
+    acc[r] = (acc[r] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
   const getStatusBadge = (p: any) => {
     if (p.devTotalMd === 0 && p.testTotalMd === 0) return <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold text-[10px]">{t('dashboard.statusPendingAssessment')}</span>;
     if (p.isFullyScheduled) return <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold text-[10px]">{t('dashboard.statusFullyScheduled')}</span>;
@@ -141,6 +148,17 @@ export const ProjectResults = () => {
         <div className="p-0">
           {activeTab === 'pending' && (
             <div className="divide-y divide-gray-100">
+              {/* Constraint Diagnostics (#30.6) */}
+              {Object.keys(constraintCounts).length > 0 && (
+                <div className="px-4 py-3 bg-gray-50 flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">{t('dashboard.constraintDiag')}</span>
+                  {Object.entries(constraintCounts).map(([reason, count]) => (
+                    <span key={reason} className="inline-flex items-center px-2 py-0.5 rounded bg-orange-100 text-orange-700 text-[10px] font-bold">
+                      {reason}: {String(count)}
+                    </span>
+                  ))}
+                </div>
+              )}
               {/* Unscheduled */}
               <div className="p-0">
                 <div className="px-4 py-3 bg-red-50/50 flex items-center space-x-2">

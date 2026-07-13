@@ -55,7 +55,7 @@ export const JiraSync = () => {
     const now = Date.now();
     const recentSyncs = targets.filter(p => p.lastJiraSyncAt && (now - p.lastJiraSyncAt) < 30 * 60 * 1000);
     if (recentSyncs.length > 0) {
-      if (!window.confirm(`有 ${recentSyncs.length} 个项目在 30 分钟内已经同步过，频繁同步可能会触发 Jira API 限制。是否继续强制同步？`)) {
+      if (!window.confirm(t('jiraSync.recentSyncConfirm').replace('{count}', recentSyncs.length.toString()))) {
         return;
       }
     }
@@ -78,6 +78,22 @@ export const JiraSync = () => {
         aliases: (r.jiraAliases || '').split(/[,，\n]/).map(s => s.trim()).filter(Boolean)
       })), unmatchedCollector, startDate, endDate);
 
+      // Check if ALL results returned zeros — strong signal of auth failure
+      const allEmpty = targets.every(p => {
+        const s = hoursMap[p.jiraEpicKey];
+        return !s || (s.totalLoggedMd === 0 && s.storyCount === 0 && s.taskCount === 0 && s.bugCount === 0 && !s.status);
+      });
+      if (allEmpty && targets.length > 0) {
+        setSyncError({
+          title: t('jiraSync.authErrorTitle'),
+          message: t('jiraSync.authErrorEmpty'),
+          details: t('jiraSync.authErrorEmptyDetails')
+        });
+        setIsSyncing(false);
+        setSyncProgress(null);
+        return;
+      }
+
       let done = 0;
       for (const p of targets) {
         const stats = hoursMap[p.jiraEpicKey];
@@ -94,7 +110,7 @@ export const JiraSync = () => {
           });
         } else {
           // Batch returned no data for this Epic (e.g. wrong key or no worklog).
-          errors.push({ projectName: p.name, epicKey: p.jiraEpicKey, message: '未获取到该 Epic 的工时数据（请检查 Epic Key 是否正确或是否有登记工时）' });
+          errors.push({ projectName: p.name, epicKey: p.jiraEpicKey, message: t('jiraSync.noEpicData') });
         }
         done += 1;
         setSyncProgress({ current: done, total: targets.length });
@@ -103,9 +119,9 @@ export const JiraSync = () => {
       console.error("Jira Sync Error:", err);
       if (err.message === 'JIRA_AUTH_ERROR') {
         setSyncError({
-          title: '未登录 Jira',
-          message: '检测到您尚未登录 Jira，或登录态已失效。请先登录 Jira 然后再尝试同步。',
-          details: '请在新标签页中打开 Jira 并登录。如果您配置了 API Token，请检查 Token 是否有效。'
+          title: t('jiraSync.authErrorTitle'),
+          message: t('jiraSync.authErrorMessage'),
+          details: t('jiraSync.authErrorDetails')
         });
       } else {
         errors.push({ projectName: '全局', epicKey: '-', message: err.message || '未知错误' });

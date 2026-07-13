@@ -37,7 +37,7 @@ export const computeProjectGaps = (
       const workingDays = getWorkingDays(new Date(a.startDate), new Date(a.endDate), workingDaySet);
       // Accumulate at full precision; do NOT round per-allocation.
       const md = (workingDays * (a.allocationPercentage || 0)) / 100;
-      if (a.allocationType === 'test' || res?.role === '测试工程师') test += md; else dev += md;
+      if (a.allocationType === 'test' || (res && ['测试工程师', '测试组长'].includes(res.role))) test += md; else dev += md;
     });
 
     const devTotal = p.devTotalMd || 0;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getStorageItem, setStorageItem } from '../../utils/storage';
 import { Save, RotateCcw, Globe } from 'lucide-react';
-import { DEFAULT_SCHEDULING_PROMPT, DEFAULT_STRATEGY_FOCUSED, DEFAULT_STRATEGY_BALANCED, DEFAULT_STRATEGY_URGENT } from '../../services/ai';
+import { DEFAULT_SCORING_PROMPT } from '../../services/ai';
 import { useTranslation } from '../../context/I18nContext';
 
 export const Settings = () => {
@@ -19,9 +19,7 @@ export const Settings = () => {
   const [aiBatchSize, setAiBatchSize] = useState(3);
   const [aiTimeout, setAiTimeout] = useState(180);
   const [aiPromptTemplate, setAiPromptTemplate] = useState('');
-  const [strategyFocused, setStrategyFocused] = useState('');
-  const [strategyBalanced, setStrategyBalanced] = useState('');
-  const [strategyUrgent, setStrategyUrgent] = useState('');
+
   
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
@@ -43,10 +41,8 @@ export const Settings = () => {
       setAiBatchSize(savedBatchSize ? Number(savedBatchSize) : 3);
       const savedTimeout = await getStorageItem('aiTimeout');
       setAiTimeout(savedTimeout ? Number(savedTimeout) : 180);
-      setAiPromptTemplate(await getStorageItem('aiPromptTemplate') || DEFAULT_SCHEDULING_PROMPT);
-      setStrategyFocused(await getStorageItem('strategyFocused') || DEFAULT_STRATEGY_FOCUSED);
-      setStrategyBalanced(await getStorageItem('strategyBalanced') || DEFAULT_STRATEGY_BALANCED);
-      setStrategyUrgent(await getStorageItem('strategyUrgent') || DEFAULT_STRATEGY_URGENT);
+      setAiPromptTemplate(await getStorageItem('aiScoringPrompt') || DEFAULT_SCORING_PROMPT);
+
     };
     loadSettings();
   }, []);
@@ -67,10 +63,8 @@ export const Settings = () => {
       await setStorageItem('openAiModel', aiModel);
       await setStorageItem('aiBatchSize', aiBatchSize);
       await setStorageItem('aiTimeout', aiTimeout);
-      await setStorageItem('aiPromptTemplate', aiPromptTemplate);
-      await setStorageItem('strategyFocused', strategyFocused);
-      await setStorageItem('strategyBalanced', strategyBalanced);
-      await setStorageItem('strategyUrgent', strategyUrgent);
+      await setStorageItem('aiScoringPrompt', aiPromptTemplate);
+
       
       setMessage({ type: 'success', text: '设置已保存成功！' });
     } catch (err) {
@@ -83,10 +77,7 @@ export const Settings = () => {
 
   const handleResetPrompt = () => {
     if (confirm('确定要重置排期策略为默认规则吗？')) {
-      setAiPromptTemplate(DEFAULT_SCHEDULING_PROMPT);
-      setStrategyFocused(DEFAULT_STRATEGY_FOCUSED);
-      setStrategyBalanced(DEFAULT_STRATEGY_BALANCED);
-      setStrategyUrgent(DEFAULT_STRATEGY_URGENT);
+      setAiPromptTemplate(DEFAULT_SCORING_PROMPT);
     }
   };
 
@@ -276,38 +267,11 @@ export const Settings = () => {
               </button>
             </div>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">单人模式 (专注模式)</label>
-                <textarea 
-                  rows={2}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono text-xs text-gray-700 leading-relaxed bg-gray-50"
-                  value={strategyFocused}
-                  onChange={e => setStrategyFocused(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">均衡模式</label>
-                <textarea 
-                  rows={2}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono text-xs text-gray-700 leading-relaxed bg-gray-50"
-                  value={strategyBalanced}
-                  onChange={e => setStrategyBalanced(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">进阶模式 (紧急模式)</label>
-                <textarea 
-                  rows={2}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono text-xs text-gray-700 leading-relaxed bg-gray-50"
-                  value={strategyUrgent}
-                  onChange={e => setStrategyUrgent(e.target.value)}
-                />
-              </div>
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-xs text-gray-500 mb-2 leading-relaxed font-bold">系统主提示词模板 (Prompt Template)</p>
+              <div className="mt-4 pt-4">
+                <p className="text-xs text-gray-500 mb-2 leading-relaxed font-bold">系统主提示词模板 (Scoring Prompt Template)</p>
                 <p className="text-xs text-gray-500 mb-2 leading-relaxed">
-                  您可以自由编辑下方的 Prompt 模板来改变 AI 的排期决策准则。
-                  请保留 <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{phase}}"}</code>、<code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{strategyFocused}}"}</code>、<code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{strategyBalanced}}"}</code> 和 <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{strategyUrgent}}"}</code> 等核心占位符。
+                  您可以自由编辑下方的 Prompt 模板来改变 AI 的打分准则。
+                  请保留 <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-700">{"{{phase}}"}</code> 核心占位符。
                 </p>
                 <textarea 
                   rows={15}

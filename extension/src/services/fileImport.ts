@@ -1,14 +1,52 @@
 import * as XLSX from 'xlsx';
 import { db } from '../db';
 
-const priorityWeight: Record<string, number> = {
-  'High': 3, 'Medium': 2, 'Low': 1,
-  '高': 3, '中': 2, '低': 1,
-  'P0': 4, 'P1': 3, 'P2': 2, 'P3': 1,
-  'Must Win': 5, 'Compliance': 4
+
+
+
+// --- Fuzzy date normalizer ---
+// Converts informal date strings ("Apr", "Q3", "March", "Jun (UAT done...)")
+// into ISO date strings (YYYY-MM-DD). For startDate use last=false (→ 1st of month),
+// for endDate use last=true (→ last day of month).
+const monthMap: Record<string, number> = {
+  jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
+  apr: 4, april: 4, may: 5, jun: 6, june: 6,
+  jul: 7, july: 7, aug: 8, august: 8, sep: 9, september: 9,
+  oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
 };
 
-const getPriorityWeight = (p: string) => priorityWeight[p] || 0;
+export const normalizeDateField = (value: string, last: boolean, year?: number): string => {
+  if (!value || typeof value !== 'string') return '';
+  let v = value.trim();
+  if (!v) return '';
+  // Already a valid ISO date?
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  // Strip parenthetical notes: "Jun (UAT done...)" → "Jun"
+  v = v.replace(/\s*\(.*\)\s*$/, '').trim();
+  const y = year ?? new Date().getFullYear();
+  // Quarter: Q1/Q2/Q3/Q4
+  const qMatch = v.match(/^[Qq](\d)$/);
+  if (qMatch) {
+    const q = Number(qMatch[1]);
+    const m = (q - 1) * 3 + 1;
+    if (last) {
+      const endM = m + 2;
+      const lastDay = new Date(y, endM, 0).getDate();
+      return `${y}-${String(endM).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    }
+    return `${y}-${String(m).padStart(2, '0')}-01`;
+  }
+  // Month name
+  const mNum = monthMap[v.toLowerCase()];
+  if (mNum) {
+    if (last) {
+      const lastDay = new Date(y, mNum, 0).getDate();
+      return `${y}-${String(mNum).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    }
+    return `${y}-${String(mNum).padStart(2, '0')}-01`;
+  }
+  return ''; // unrecognized
+};
 
 // Helper to find column index by matching header names (supports English and Chinese)
 const findColumnIndex = (headers: string[], matchNames: string[]): number => {
@@ -94,16 +132,6 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
         const priorityStr = idxPriority !== -1 ? row[idxPriority]?.toString() || 'Medium' : 'Medium';
         const devTotalMd = idxDevMd !== -1 ? Number(row[idxDevMd]) || 0 : 0;
         const testTotalMd = idxTestMd !== -1 ? Number(row[idxTestMd]) || 0 : 0;
-        const isHighPriority = getPriorityWeight(priorityStr) >= 3;
-        // User specified: Dev MD <= 10 means single mode (focused).
-        // High priority and Dev MD > 10 means balanced.
-        // Others (e.g. low priority and Dev MD > 10) also fallback to focused.
-        const isLargeDevProject = devTotalMd > 10; 
-        
-        let defaultStrategy: 'balanced' | 'focused' | 'urgent' = 'focused';
-        if (isHighPriority && isLargeDevProject) {
-          defaultStrategy = 'balanced';
-        }
         
         const rawScrumName = idxScrum !== -1 ? row[idxScrum]?.toString().trim() || '' : '';
         const scrumTeamId = rawScrumName ? scrumMap.get(rawScrumName.toLowerCase()) : undefined;
@@ -124,8 +152,8 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
           priority: priorityStr,
           status: idxStatus !== -1 ? row[idxStatus]?.toString() || 'To Do' : 'To Do',
           digitalResponsible: idxDigitalResponsible !== -1 ? row[idxDigitalResponsible]?.toString() || '' : '',
-          startDate: idxStartDate !== -1 ? row[idxStartDate]?.toString() || '' : '',
-          endDate: idxEndDate !== -1 ? row[idxEndDate]?.toString() || '' : '',
+          startDate: idxStartDate !== -1 ? normalizeDateField(row[idxStartDate]?.toString() || '', false) : '',
+          endDate: idxEndDate !== -1 ? normalizeDateField(row[idxEndDate]?.toString() || '', true) : '',
           estimatedGoLiveTime: idxGoLive !== -1 ? row[idxGoLive]?.toString() || '' : '',
           comments: idxComments !== -1 ? row[idxComments]?.toString() || '' : '',
           jiraEpicKey: idxJiraKey !== -1 ? row[idxJiraKey]?.toString() || '' : '',
@@ -137,7 +165,6 @@ export const importProjectsFromFile = async (files: File | FileList | File[]): P
           detailsProductTestMd: idxDetailsTestMd !== -1 ? row[idxDetailsTestMd]?.toString() || '' : '',
           techStack: idxTechStack !== -1 ? row[idxTechStack]?.toString() || '' : '',
           domain: idxDomain !== -1 ? row[idxDomain]?.toString() || '' : '',
-          schedulingStrategy: defaultStrategy,
           ...(scrumTeamId ? { scrumTeamId } : {}),
           teamSchedulingMode,
         };
