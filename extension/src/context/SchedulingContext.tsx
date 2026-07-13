@@ -1,9 +1,8 @@
 import { createContext, useContext, useState, type ReactNode, useRef } from 'react';
 import { db } from '../db';
-import { suggestAllocationsForBatch, type AIMicroAllocation } from '../services/ai';
-import { calculateEndDate, isValidDateStr, getWorkingDays, getWeekNumber, getISOWeekYear, formatLocalDate, buildWorkingDaySet } from '../utils/dateUtils';
+import { fetchAIScores } from '../services/ai';
+import { calculateEndDate, isValidDateStr, getWorkingDays, formatLocalDate, buildWorkingDaySet, getISOWeekYear, getWeekNumber } from '../utils/dateUtils';
 import { computeProjectGaps } from '../utils/audit';
-import { getStorageItem } from '../utils/storage';
 
 interface SchedulingContextType {
   isScheduling: boolean;
@@ -28,9 +27,8 @@ interface DailySlot {
   totalCapacity: number;
   usedCapacity: number;
   available: number;
-  weekYear: number;
-  weekNumber: number;
   assignedNonOpProjects: Set<number>;
+  weekKey: string;
 }
 
 export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
@@ -51,17 +49,14 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const getAvailableWindows = (calendar: DailySlot[]) => {
-    const windows: { from: string, to: string, dailyAvailable: number, assigned: number[], assignedStr: string }[] = [];
+    const windows: { from: string, to: string, dailyAvailable: number }[] = [];
     if (calendar.length === 0) return windows;
     let currentWindow: any = null;
     calendar.forEach(slot => {
-      if (slot.available >= 1) {
-        const assignedArray = Array.from(slot.assignedNonOpProjects);
-        const assignedStr = assignedArray.join(',');
-        
-        if (!currentWindow || currentWindow.dailyAvailable !== slot.available || currentWindow.assignedStr !== assignedStr) {
-          if (currentWindow) windows.push(currentWindow);
-          currentWindow = { from: slot.date, to: slot.date, dailyAvailable: slot.available, assigned: assignedArray, assignedStr };
+      // One task per day: a day is "available" only if fully free
+      if (slot.available >= slot.totalCapacity && slot.totalCapacity > 0) {
+        if (!currentWindow) {
+          currentWindow = { from: slot.date, to: slot.date, dailyAvailable: slot.available };
         } else {
           currentWindow.to = slot.date;
         }
@@ -94,11 +89,8 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
 
     const rangeStart = new Date(selectedYear, startMonth - 1, 1);
     const rangeEnd = new Date(selectedYear, endMonth, 0);
-    // Ensure the calendar (holidays / special workdays) reflects the user's saved
-    // configuration even if the Holidays page was never opened this session.
     const workingDaySet = await buildWorkingDaySet(rangeStart, rangeEnd);
     
-    // Map to track why projects were rejected or couldn't be scheduled
     const rejectionReasons = new Map<number, string>();
 
     const checkStop = () => {
@@ -106,9 +98,9 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
     };
 
     try {
-      console.group('🚀 [Persistent] 方案 A：时间槽位像素级调度启动');
+      console.group('🚀 确定性排期引擎启动 (混合 AI 打分)');
       setCurrentStep(1);
-      setScheduleStatus('🚀 像素建模：构建每日资源容量矩阵...');
+      setScheduleStatus('🚀 构建基础矩阵与 AI 打分...');
       if (shouldClear) {
         const allIds = await db.allocations.toArray();
         const unlockedIds = allIds.filter(a => !a.isLocked).map(a => a.id!);
@@ -130,19 +122,22 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         let current = new Date(rangeStart);
         const resAllocs = currentAllocs.filter(a => Number(a.resourceId) === Number(res.id));
         const leaveDays: Set<string> = new Set(Array.isArray(res.unavailableDates) ? res.unavailableDates : []);
+        
         while (current <= rangeEnd) {
           const dateStr = formatLocalDate(current);
-          const weekYear = getISOWeekYear(current);
-          const weekNumber = getWeekNumber(current);
           if (workingDaySet.has(dateStr)) {
-            // Personal leave (请假): the resource has zero capacity that day, so it
-            // can neither be allocated to nor counted as idle.
             const onLeave = leaveDays.has(dateStr);
             const dayCapacity = onLeave ? 0 : res.capacity;
             let used = 0;
+            const assignedNonOpProjects = new Set<number>();
+            const weekKey = `${getISOWeekYear(current)}-W${getWeekNumber(current)}`;
+            
             resAllocs.forEach(a => {
               if (dateStr >= a.startDate && dateStr <= a.endDate) {
                 used += (a.allocationPercentage || 0);
+                if (a.projectId > 0) {
+                  assignedNonOpProjects.add(Number(a.projectId));
+                }
               }
             });
             calendar.push({
@@ -150,37 +145,25 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
               totalCapacity: dayCapacity,
               usedCapacity: used,
               available: Math.max(0, dayCapacity - used),
-              weekYear,
-              weekNumber,
-              assignedNonOpProjects: new Set<number>()
+              assignedNonOpProjects,
+              weekKey,
             });
           }
           current.setDate(current.getDate() + 1);
         }
         
-        // Populate assignedNonOpProjects for the whole week
-        resAllocs.forEach(a => {
-          if (a.projectId > 0) {
-            const aStart = new Date(a.startDate);
-            const aEnd = new Date(a.endDate);
-            const sDate = new Date(aStart > new Date(rangeStart) ? aStart : rangeStart);
-            const eDate = new Date(aEnd < new Date(rangeEnd) ? aEnd : rangeEnd);
-            
-            const occupiedWeeks = new Set<string>();
-            let curr = new Date(sDate);
-            while (curr <= eDate) {
-              occupiedWeeks.add(`${getISOWeekYear(curr)}-${getWeekNumber(curr)}`);
-              curr.setDate(curr.getDate() + 1);
-            }
-            
-            calendar.forEach(slot => {
-              if (occupiedWeeks.has(`${slot.weekYear}-${slot.weekNumber}`)) {
-                slot.assignedNonOpProjects.add(a.projectId);
-              }
-            });
-          }
+        // Propagate assignedNonOpProjects across all days of the same week for the resource
+        // so we can easily check weekly limits on any day slot.
+        const weekMap = new Map<string, Set<number>>();
+        calendar.forEach(slot => {
+          if (!weekMap.has(slot.weekKey)) weekMap.set(slot.weekKey, new Set());
+          const weekSet = weekMap.get(slot.weekKey)!;
+          slot.assignedNonOpProjects.forEach(pid => weekSet.add(pid));
         });
-        
+        calendar.forEach(slot => {
+          slot.assignedNonOpProjects = weekMap.get(slot.weekKey)!;
+        });
+
         sharedMatrix.set(res.id, calendar);
         return calendar;
       };
@@ -188,27 +171,24 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
       const updateResourceCalendar = (resId: number, newAlloc: any) => {
         const calendar = sharedMatrix.get(resId);
         if (calendar) {
-          const occupiedWeeks = new Set<string>();
-          if (newAlloc.projectId > 0) {
-            const aStart = new Date(newAlloc.startDate);
-            const aEnd = new Date(newAlloc.endDate);
-            let curr = new Date(aStart);
-            while (curr <= aEnd) {
-              occupiedWeeks.add(`${getISOWeekYear(curr)}-${getWeekNumber(curr)}`);
-              curr.setDate(curr.getDate() + 1);
-            }
-          }
-
+          // Find all weeks affected by this allocation
+          const affectedWeeks = new Set<string>();
           calendar.forEach(slot => {
             if (slot.date >= newAlloc.startDate && slot.date <= newAlloc.endDate) {
                slot.usedCapacity += newAlloc.allocationPercentage;
                const res = resources.find(r => r.id === resId);
                slot.available = Math.max(0, (res?.capacity || 100) - slot.usedCapacity);
-            }
-            if (newAlloc.projectId > 0 && occupiedWeeks.has(`${slot.weekYear}-${slot.weekNumber}`)) {
-               slot.assignedNonOpProjects.add(newAlloc.projectId);
+               affectedWeeks.add(slot.weekKey);
             }
           });
+          
+          if (newAlloc.projectId > 0) {
+            calendar.forEach(slot => {
+              if (affectedWeeks.has(slot.weekKey)) {
+                slot.assignedNonOpProjects.add(Number(newAlloc.projectId));
+              }
+            });
+          }
         }
       };
 
@@ -219,47 +199,197 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         const idle = currentRes.map(r => {
           const calendar = getResourceCalendar(r, currentAllocs);
           const availableWindows = getAvailableWindows(calendar);
-          const idleMd = calendar.reduce((sum, slot) => sum + (slot.available / 100), 0);
-          const capacityMd = calendar.length * (r.capacity / 100);
-          const utilization = capacityMd > 0 ? ((capacityMd - idleMd) / capacityMd) * 100 : 0;
-          const summary = availableWindows.map(w => {
-            const exclusive = w.assigned.length > 0 ? ` [Only Proj ${w.assigned.join(',')}]` : '';
-            return `${w.from}~${w.to} (${w.dailyAvailable}%)${exclusive}`;
-          }).join(', ');
+          const dailyCap = r.capacity || 100;
+          const idleMd = calendar.filter(slot => slot.available >= dailyCap).length;
+          const totalWorkingDays = calendar.filter(slot => slot.totalCapacity > 0).length;
+          const utilization = totalWorkingDays > 0 ? ((totalWorkingDays - idleMd) / totalWorkingDays) * 100 : 0;
+          const summary = availableWindows.map(w => `${w.from}~${w.to}`).join(', ');
           
-          let finalSummary = summary ? `Free Slots: ${summary}` : 'Full';
+          let finalSummary = summary ? `Free Days: ${summary}` : 'Full';
           if (finalSummary.length > 200 && availableWindows.length > 3) {
-             finalSummary = `Free Slots: ${availableWindows.slice(-3).map(w => {
-               const exclusive = w.assigned.length > 0 ? ` [Only Proj ${w.assigned.join(',')}]` : '';
-               return `${w.from}~${w.to} (${w.dailyAvailable}%)${exclusive}`;
-             }).join(', ')}`;
+             finalSummary = `Free Days: ${availableWindows.slice(-3).map(w => `${w.from}~${w.to}`).join(', ')}`;
           }
           
           return { ...r, idleMd, utilization, scheduleSummary: finalSummary };
-        }).filter(r => Math.ceil(r.idleMd) >= 1);
+        }).filter(r => r.idleMd >= 1);
 
         return { gaps, idle };
       };
 
-      const findEarliestFitDate = (resourceId: number, currentAllocs: any[], defaultStartDate: string, percentage: number, resources: any[], projectId: number, strategy?: string) => {
-        const res = resources?.find(r => Number(r.id) === Number(resourceId));
-        if (!res) return "9999-12-31";
-        const calendar = getResourceCalendar(res, currentAllocs);
-        const fit = calendar.find(slot => {
-          if (slot.date < defaultStartDate) return false;
-          if (strategy === 'urgent') {
-            if (slot.available <= 0) return false;
-          } else {
-            if (slot.available < percentage) return false;
-          }
-          if (projectId > 0) {
-            if (slot.assignedNonOpProjects.size > 0 && !slot.assignedNonOpProjects.has(projectId)) {
-              return false;
-            }
-          }
-          return true;
+      // 1. Fetch AI Scores upfront
+      setScheduleStatus('🧠 正在请求 AI 技能匹配打分...');
+      
+      const { gaps: initialGaps, idle: initialIdle } = runAudit(readyProjects, resources, currentAllocations);
+      
+      const devG = initialGaps.filter(g => Math.ceil(g.devGap) >= 1);
+      const devCandidates = initialIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师', '开发组长'].includes(r.role));
+      const devScores = (devG.length && devCandidates.length) 
+        ? await fetchAIScores(devG, devCandidates, 'dev', signal) : [];
+        
+      checkStop();
+      
+      const testG = initialGaps.filter(g => Math.ceil(g.testGap) >= 1);
+      const testCandidates = initialIdle.filter(r => ['测试工程师', '测试组长'].includes(r.role));
+      const testScores = (testG.length && testCandidates.length) 
+        ? await fetchAIScores(testG, testCandidates, 'test', signal) : [];
+
+      const getCandidateScore = (projectId: number, resourceId: number, phase: 'dev' | 'test') => {
+        const scores = phase === 'dev' ? devScores : testScores;
+        const entry = scores.find(s => s.projectId === projectId && s.resourceId === resourceId);
+        return entry ? entry.score : 0;
+      };
+
+      // PASS 0: Deterministic Ops Scheduling (Round-Robin)
+      setScheduleStatus(`⚙️ 阶段零：按月分配产品运维基础人天 (均匀分摊)...`);
+      const operations = await db.productOperations.toArray();
+      if (operations.length > 0) {
+        const leads = new Set<string>();
+        readyProjects.forEach(p => {
+          if (p.projectTechLead) leads.add(p.projectTechLead);
+          if (p.projectQualityLead) leads.add(p.projectQualityLead);
         });
-        return fit ? fit.date : "9999-12-31";
+
+        for (const op of operations) {
+          checkStop();
+          const candidates = resources.filter(r => r.skills?.includes(op.productName));
+
+          for (let m = startMonth; m <= endMonth; m++) {
+            const targetDevMd = op.monthlyDevMd;
+            const targetTestMd = op.monthlyTestMd;
+            if (targetDevMd <= 0 && targetTestMd <= 0) continue;
+
+            const monthStart = `${selectedYear}-${String(m).padStart(2, '0')}-01`;
+            const monthLastDay = new Date(selectedYear, m, 0).getDate();
+            const monthEnd = `${selectedYear}-${String(m).padStart(2, '0')}-${String(monthLastDay).padStart(2, '0')}`;
+
+            const allocateOpForMonth = async (targetMd: number, phase: 'dev' | 'test') => {
+              let remainingMd = targetMd;
+              const phaseCandidates = candidates.filter(r => {
+                if (phase === 'dev') return ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师', '开发组长'].includes(r.role);
+                return ['测试工程师', '测试组长'].includes(r.role);
+              });
+
+              const CHIEF_ROLES = ['开发组长', '测试组长'];
+              const regularPool = phaseCandidates.filter(r => !leads.has(r.name) && !CHIEF_ROLES.includes(r.role));
+              const leadPool = phaseCandidates.filter(r => leads.has(r.name) && !CHIEF_ROLES.includes(r.role));
+              const chiefPool = phaseCandidates.filter(r => CHIEF_ROLES.includes(r.role));
+
+              const allocateFromPoolRoundRobin = async (pool: typeof phaseCandidates) => {
+                if (pool.length === 0 || remainingMd < 0.5) return;
+                
+                // Distribute evenly among all available people in the pool
+                const mdPerPerson = Math.ceil(remainingMd / pool.length);
+                
+                for (const res of pool) {
+                  if (remainingMd < 0.5) break;
+                  
+                  const targetMdForThisPerson = Math.min(mdPerPerson, remainingMd);
+                  const dailyCap = res.capacity || 100;
+                  const mdPerDay = dailyCap / 100;
+                  if (mdPerDay <= 0) continue;
+
+                  const resCalendar = getResourceCalendar(res, currentAllocations);
+                  const monthSlots = resCalendar
+                    .filter(s => s.date >= monthStart && s.date <= monthEnd && s.available >= dailyCap)
+                    .sort((a, b) => a.date.localeCompare(b.date));
+                  if (monthSlots.length === 0) continue;
+
+                  const daysNeeded = Math.min(Math.ceil(targetMdForThisPerson / mdPerDay), monthSlots.length);
+                  if (daysNeeded < 1) continue;
+
+                  const step = monthSlots.length / daysNeeded;
+                  for (let i = 0; i < daysNeeded; i++) {
+                    if (remainingMd < 0.5) break;
+                    const slot = monthSlots[Math.floor(i * step)];
+                    const allocToSave = {
+                      resourceId: res.id!,
+                      projectId: -(op.id! + 1000000),
+                      allocationPercentage: dailyCap,
+                      startDate: slot.date,
+                      endDate: slot.date,
+                      allocationType: phase
+                    };
+                    currentAllocations.push(allocToSave);
+                    await db.allocations.add({
+                      ...allocToSave,
+                      allocationPercentage: Math.round(dailyCap)
+                    } as any);
+                    updateResourceCalendar(res.id!, allocToSave);
+                    remainingMd -= mdPerDay;
+                  }
+                }
+              };
+
+              await allocateFromPoolRoundRobin(regularPool);
+              if (remainingMd >= 0.5) await allocateFromPoolRoundRobin(leadPool);
+              if (remainingMd >= 0.5) await allocateFromPoolRoundRobin(chiefPool);
+            };
+
+            if (targetDevMd > 0) await allocateOpForMonth(targetDevMd, 'dev');
+            if (targetTestMd > 0) await allocateOpForMonth(targetTestMd, 'test');
+          }
+        }
+      }
+
+      // DETERMINISTIC GREEDY ALLOCATION (Replaces PASS 1 & 3)
+      setCurrentStep(2);
+      
+      const computeAllowedResourceIds = (p: any, isLatePass: boolean) => {
+        let allowed = resources.map(r => Number(r.id));
+        const teamMode = p.teamSchedulingMode || 'all-in';
+        if (teamMode === 'team-first') {
+          if (p.scrumTeamId) allowed = resources.filter(r => Number(r.scrumTeamId) === Number(p.scrumTeamId)).map(r => Number(r.id));
+        } else if (teamMode === 'cross-team') {
+          if (p.scrumTeamId && !isLatePass) {
+            allowed = resources.filter(r => Number(r.scrumTeamId) === Number(p.scrumTeamId)).map(r => Number(r.id));
+          }
+        }
+        return allowed;
+      };
+
+      const findEarliestFitDateAndMaxDays = (resourceId: number, currentAllocs: any[], defaultStartDate: string, resources: any[], projectId: number) => {
+        const res = resources?.find(r => Number(r.id) === Number(resourceId));
+        if (!res) return { startDate: "9999-12-31", maxContinuousDays: 0 };
+        const calendar = getResourceCalendar(res, currentAllocs);
+        const dailyCap = res.capacity || 100;
+        
+        let bestStart = "9999-12-31";
+        let currentContinuousDays = 0;
+        let maxContinuousDays = 0;
+        
+        for (let i = 0; i < calendar.length; i++) {
+          const slot = calendar[i];
+          if (slot.date < defaultStartDate) continue;
+          
+          // Max 3 projects per week constraint
+          let weekIsFull = false;
+          if (projectId > 0) {
+             if (slot.assignedNonOpProjects.size >= 3 && !slot.assignedNonOpProjects.has(projectId)) {
+               weekIsFull = true;
+             }
+          }
+          
+          if (slot.available >= dailyCap && !weekIsFull) {
+            if (currentContinuousDays === 0) {
+               bestStart = slot.date;
+            }
+            currentContinuousDays++;
+          } else {
+            if (currentContinuousDays > 0) {
+               maxContinuousDays = Math.max(maxContinuousDays, currentContinuousDays);
+               // We found a chunk. For greedy allocation, we can just return the first available chunk 
+               // rather than searching for the absolute largest across the whole horizon.
+               break; 
+            }
+            currentContinuousDays = 0;
+          }
+        }
+        
+        if (currentContinuousDays > 0) {
+           maxContinuousDays = Math.max(maxContinuousDays, currentContinuousDays);
+        }
+        
+        return { startDate: bestStart, maxContinuousDays };
       };
 
       const calculateTestStartDate = (projectId: number, currentAllocs: any[], defaultStartDate: string) => {
@@ -287,362 +417,148 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         return formatLocalDate(d);
       };
 
-      const computeAllowedResourceIds = (p: any, isLatePass: boolean) => {
-        let allowed = resources.map(r => Number(r.id));
-        const teamMode = p.teamSchedulingMode || 'all-in';
-        if (teamMode === 'team-first') {
-          if (p.scrumTeamId) allowed = resources.filter(r => Number(r.scrumTeamId) === Number(p.scrumTeamId)).map(r => Number(r.id));
-        } else if (teamMode === 'cross-team') {
-          if (p.scrumTeamId && !isLatePass) {
-            allowed = resources.filter(r => Number(r.scrumTeamId) === Number(p.scrumTeamId)).map(r => Number(r.id));
-          }
-        }
-        return allowed;
-      };
-
-      const applySuggestions = async (suggestions: AIMicroAllocation[], phase: 'dev' | 'test', pool: any[], isLatePass: boolean) => {
-        let count = 0;
-        console.group(`[Hard Logic] Applying ${suggestions.length} AI suggestions for ${phase.toUpperCase()}`);
+      const greedyAllocate = async (phase: 'dev' | 'test', isLatePass: boolean) => {
+        setScheduleStatus(`🛠️ 阶段一/三：核心贪心分配 (${phase.toUpperCase()} - ${isLatePass ? '全局匹配' : '严格模式'})...`);
         const { gaps: cGaps, idle: cIdle } = runAudit(readyProjects, resources, currentAllocations);
-        const focusedAssigned = new Set<number>();
         
-        for (const sug of suggestions) {
+        const getPriorityWeight = (p: string) => {
+          const priorityWeight: Record<string, number> = {
+            'High': 3, 'Medium': 2, 'Low': 1,
+            '高': 3, '中': 2, '低': 1,
+            'P0': 4, 'P1': 3, 'P2': 2, 'P3': 1,
+            'Must Win': 5, 'Compliance': 4
+          };
+          return priorityWeight[p] || 0;
+        };
+        const sortedProjects = [...readyProjects].sort((a, b) => getPriorityWeight(b.priority) - getPriorityWeight(a.priority) || (a.id || 0) - (b.id || 0));
+        
+        for (const project of sortedProjects) {
           checkStop();
-          const project = pool.find(p => Number(p.id) === Number(sug.projectId));
-          const resource = resources.find(r => Number(r.id) === Number(sug.resourceId));
-          if (!project || !resource) continue;
+          let pGap = cGaps.find(g => Number(g.id) === Number(project.id));
+          if (!pGap) continue;
+          
+          let targetGap = phase === 'dev' ? pGap.devGap : pGap.testGap;
+          if (Math.ceil(targetGap) < 1) continue;
 
-          if (project.schedulingStrategy === 'focused') {
-            const hasAlloc = currentAllocations.some(a => Number(a.projectId) === Number(project.id) && a.allocationType === phase);
-            if (focusedAssigned.has(project.id!) || hasAlloc) {
-              console.warn(`[Hard Logic] Skipped secondary suggestion for focused project ${project.id}`);
-              continue;
-            }
-            focusedAssigned.add(project.id!);
-          }
-
-          const pGap = cGaps.find(g => Number(g.id) === Number(project.id));
-          const rIdle = cIdle.find(r => Number(r.id) === Number(resource.id));
-          if (!pGap || !rIdle) continue;
-
-          // Enforce Scrum Team Constraint in JS hard logic
           const allowedIds = computeAllowedResourceIds(project, isLatePass);
-          if (!allowedIds.includes(Number(resource.id))) {
-            console.warn(`[Hard Logic] Blocked AI suggestion violating Scrum Team constraints: Project ${project.id} -> Resource ${resource.id}`);
-            rejectionReasons.set(project.id!, 'scrum_constraint_violated');
-            continue;
-          }
-
-          const targetGap = phase === 'dev' ? pGap.devGap : pGap.testGap;
-          const exactFinalMd = Math.min(sug.allocatedMd, targetGap, rIdle.idleMd);
-          const finalMd = Math.ceil(exactFinalMd);
-
-          if (finalMd >= 1) {
-            const perc = sug.allocationPercentage || 100;
-            let start = isValidDateStr(project.startDate) ? project.startDate! : defaultStart;
-            if (phase === 'test') start = calculateTestStartDate(project.id!, currentAllocations, start);
-            const startDate = findEarliestFitDate(resource.id!, currentAllocations, start, perc, resources, project.id!, project.schedulingStrategy);
-            if (startDate > scheduleMaxDate) {
-              rejectionReasons.set(project.id!, 'date_window_exceeded');
-              continue;
-            }
-            
-            let endDate = calculateEndDate(startDate, exactFinalMd, perc);
-            
-            // To prevent a task from crossing week boundary into an illegally occupied week, 
-            // we should ideally truncate it, but calculateEndDate handles working days.
-            // For now, if we assign it, the updateResourceCalendar will mark the occupied weeks.
-            // If it crosses into a week occupied by ANOTHER project, we need to stop it.
-            // Let's truncate endDate if it hits a week occupied by another project.
-            let curr = new Date(startDate);
-            const eDate = new Date(endDate);
-            let truncatedDate = endDate;
-            const resCalendar = getResourceCalendar(resource, currentAllocations);
-            const calendarMap = new Map(resCalendar.map(s => [s.date, s]));
-            
-            while (curr <= eDate) {
-              const dStr = formatLocalDate(curr);
-              const slot = calendarMap.get(dStr);
-              if (slot && slot.assignedNonOpProjects.size > 0 && !slot.assignedNonOpProjects.has(project.id!)) {
-                // Hitting a boundary of another project! Truncate right before this.
-                let prev = new Date(curr);
-                prev.setDate(prev.getDate() - 1);
-                truncatedDate = formatLocalDate(prev);
-                break;
-              }
-              curr.setDate(curr.getDate() + 1);
-            }
-            
-            endDate = truncatedDate;
-            // Clip to the scheduling horizon BEFORE recomputing man-days, otherwise
-            // actualMd would over-count days that fall beyond scheduleMaxDate (#5).
-            if (endDate > scheduleMaxDate) endDate = scheduleMaxDate;
-            if (endDate < startDate) {
-              rejectionReasons.set(project.id!, 'weekly_exclusivity_conflict');
-              continue; // Cannot even schedule 1 day
-            }
-            
-            // Recalculate exactFinalMd based on potentially truncated endDate
-            const actualWorkingDays = getWorkingDays(new Date(startDate), new Date(endDate), workingDaySet);
-            const actualMd = Math.min((actualWorkingDays * perc) / 100, exactFinalMd);
-            if (actualMd < 1) continue;
-
-            const allocToSave = { 
-              resourceId: resource.id!, 
-              projectId: project.id!, 
-              allocationPercentage: perc, 
-              startDate, 
-              endDate, 
-              allocationType: phase 
-            };
-            currentAllocations.push(allocToSave);
-            await db.allocations.add({
-              ...allocToSave,
-              // Round before saving to DB
-              allocationPercentage: Math.round(perc)
-            } as any);
-            count++;
-            totalAllocatedThisSession += actualMd;
-            
-            updateResourceCalendar(resource.id!, allocToSave);
-            if (phase === 'dev') pGap.devGap -= actualMd; else pGap.testGap -= actualMd;
-            rIdle.idleMd -= actualMd;
-          }
-        }
-        console.groupEnd();
-        return count;
-      };
-
-      // PASS 0: Deterministic Ops Scheduling (Product Operations)
-      setScheduleStatus(`⚙️ 阶段零：按月分配产品运维基础人天...`);
-      const operations = await db.productOperations.toArray();
-      if (operations.length > 0) {
-        // Identify Leads (Good resources) to protect
-        const leads = new Set<string>();
-        readyProjects.forEach(p => {
-          if (p.projectTechLead) leads.add(p.projectTechLead);
-          if (p.projectQualityLead) leads.add(p.projectQualityLead);
-        });
-
-        for (const op of operations) {
-          checkStop();
           
-          // Find candidate resources matching the product name
-          const candidates = resources.filter(r => r.skills?.includes(op.productName));
+          // Filter idle candidates for this phase
+          const candidateRoles = phase === 'dev' 
+            ? ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师', '开发组长']
+            : ['测试工程师', '测试组长'];
+            
+          let candidates = cIdle.filter(r => candidateRoles.includes(r.role) && allowedIds.includes(r.id!));
           
-          // Sort candidates: Non-leads first
+          // Sort candidates by AI Score, then by whether they are a lead
+          const leadName = phase === 'dev' ? project.projectTechLead : project.projectQualityLead;
+          
           candidates.sort((a, b) => {
-            const aIsLead = leads.has(a.name) ? 1 : 0;
-            const bIsLead = leads.has(b.name) ? 1 : 0;
-            return aIsLead - bIsLead;
+             const scoreA = getCandidateScore(project.id!, a.id!, phase);
+             const scoreB = getCandidateScore(project.id!, b.id!, phase);
+             if (scoreA !== scoreB) return scoreB - scoreA;
+             const aIsLead = a.name === leadName ? 1 : 0;
+             const bIsLead = b.name === leadName ? 1 : 0;
+             return bIsLead - aIsLead;
           });
 
-          for (let m = startMonth; m <= endMonth; m++) {
-            const targetDevMd = op.monthlyDevMd;
-            const targetTestMd = op.monthlyTestMd;
-            if (targetDevMd <= 0 && targetTestMd <= 0) continue;
+          for (const resource of candidates) {
+             if (Math.ceil(targetGap) < 1) break; // Filled
 
-            const monthStart = `${selectedYear}-${String(m).padStart(2, '0')}-01`;
-            const monthLastDay = new Date(selectedYear, m, 0).getDate();
-            const monthEnd = `${selectedYear}-${String(m).padStart(2, '0')}-${String(monthLastDay).padStart(2, '0')}`;
+             const rIdle = cIdle.find(r => r.id === resource.id);
+             if (!rIdle || rIdle.idleMd < 1) continue;
 
-            const allocateOpForMonth = async (targetMd: number, phase: 'dev' | 'test') => {
-              let remainingMd = targetMd;
-              const phaseCandidates = candidates.filter(r => {
-                if (phase === 'dev') return ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role);
-                return r.role === '测试工程师';
-              });
+             const perc = resource.capacity || 100;
+             let start = isValidDateStr(project.startDate) ? project.startDate! : defaultStart;
+             if (phase === 'test') start = calculateTestStartDate(project.id!, currentAllocations, start);
+             
+             const { startDate, maxContinuousDays } = findEarliestFitDateAndMaxDays(resource.id!, currentAllocations, start, resources, project.id!);
+             if (startDate > scheduleMaxDate || maxContinuousDays === 0) {
+               continue;
+             }
 
-              for (const res of phaseCandidates) {
-                if (remainingMd < 0.5) break;
+             const allocatableMd = Math.min(targetGap, rIdle.idleMd, maxContinuousDays);
+             const finalMd = Math.ceil(allocatableMd);
+             
+             if (finalMd >= 1) {
+                let endDate = calculateEndDate(startDate, finalMd, perc);
+                if (endDate > scheduleMaxDate) endDate = scheduleMaxDate;
+                if (endDate < startDate) continue;
 
-                // Ops occupies WHOLE working days at the resource's daily capacity.
-                // Spreading a tiny fraction (e.g. 1MD/22d ≈ 5%) across the whole month
-                // makes every week round to 0 in the schedule view, so the person
-                // appears assigned yet "empty". Allocating full days keeps it visible.
-                const dailyCap = res.capacity || 100;
-                const mdPerDay = dailyCap / 100;
-                if (mdPerDay <= 0) continue;
+                const actualWorkingDays = getWorkingDays(new Date(startDate), new Date(endDate), workingDaySet);
+                const actualMd = Math.min(actualWorkingDays, finalMd);
+                if (actualMd < 1) continue;
 
-                const resCalendar = getResourceCalendar(res, currentAllocations);
-                // Only use days that still have a full day of capacity free for ops.
-                const monthSlots = resCalendar
-                  .filter(s => s.date >= monthStart && s.date <= monthEnd && s.available >= dailyCap)
-                  .sort((a, b) => a.date.localeCompare(b.date));
-                if (monthSlots.length === 0) continue;
-
-                const daysNeeded = Math.min(Math.ceil(remainingMd / mdPerDay), monthSlots.length);
-                if (daysNeeded < 1) continue;
-
-                // Spread the chosen days evenly across the available days to avoid
-                // clustering all ops work into a single week.
-                const step = monthSlots.length / daysNeeded;
-                for (let i = 0; i < daysNeeded; i++) {
-                  if (remainingMd < 0.5) break;
-                  const slot = monthSlots[Math.floor(i * step)];
-                  const allocToSave = {
-                    resourceId: res.id!,
-                    projectId: -(op.id! + 1000000), // Virtual project ID for Ops
-                    allocationPercentage: dailyCap,
-                    startDate: slot.date,
-                    endDate: slot.date,
-                    allocationType: phase
-                  };
-                  currentAllocations.push(allocToSave);
-                  await db.allocations.add({
-                    ...allocToSave,
-                    allocationPercentage: Math.round(dailyCap)
-                  } as any);
-
-                  updateResourceCalendar(res.id!, allocToSave);
-                  remainingMd -= mdPerDay;
-                }
-              }
-            };
-
-            if (targetDevMd > 0) await allocateOpForMonth(targetDevMd, 'dev');
-            if (targetTestMd > 0) await allocateOpForMonth(targetTestMd, 'test');
+                const allocToSave = { 
+                  resourceId: resource.id!, 
+                  projectId: project.id!, 
+                  allocationPercentage: perc, 
+                  startDate, 
+                  endDate, 
+                  allocationType: phase 
+                };
+                
+                currentAllocations.push(allocToSave);
+                await db.allocations.add({
+                  ...allocToSave,
+                  allocationPercentage: Math.round(perc)
+                } as any);
+                totalAllocatedThisSession += actualMd;
+                
+                updateResourceCalendar(resource.id!, allocToSave);
+                targetGap -= actualMd;
+                rIdle.idleMd -= actualMd;
+                if (phase === 'dev') pGap.devGap -= actualMd; else pGap.testGap -= actualMd;
+             }
           }
         }
-      }
+      };
 
-      // PASS 1: Priority Mini-Batches
-      setCurrentStep(2);
-      
-      const savedBatchSize = await getStorageItem('aiBatchSize');
-      const BATCH_SIZE = savedBatchSize ? Number(savedBatchSize) : 3;
-      
-      for (let i = 0; i < readyProjects.length; i += BATCH_SIZE) {
-        checkStop();
-        const batch = readyProjects.slice(i, i + BATCH_SIZE);
-        setScheduleStatus(`🛠️ 阶段一：像素匹配 [${i+1}~${Math.min(i+BATCH_SIZE, readyProjects.length)}]...`);
-        const { gaps: dGaps, idle: dIdle } = runAudit(readyProjects, resources, currentAllocations);
-        const bDev = batch.map(p => ({ 
-          ...p, 
-          gap: Math.ceil(dGaps.find(g => g.id === p.id)?.devGap || 0), 
-          projectTechLead: p.projectTechLead, 
-          detailsProductDevMd: p.detailsProductDevMd, 
-          schedulingStrategy: p.schedulingStrategy,
-          allowedResourceIds: computeAllowedResourceIds(p, false)
-        })).filter(p => p.gap >= 1);
-        if (bDev.length && dIdle.some(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role))) {
-          const batchAllowedIds = new Set(bDev.flatMap(p => p.allowedResourceIds));
-          const filteredIdle = dIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role) && batchAllowedIds.has(Number(r.id)));
-          if (filteredIdle.length > 0) {
-            const sug = await suggestAllocationsForBatch(bDev as any, filteredIdle, 'dev', false, signal);
-            checkStop();
-            await applySuggestions(sug, 'dev', batch, false);
-          }
-        }
-        checkStop();
-        const { gaps: tGaps, idle: tIdle } = runAudit(readyProjects, resources, currentAllocations);
-        const bTest = batch.map(p => ({ 
-          ...p, 
-          gap: Math.ceil(tGaps.find(g => g.id === p.id)?.testGap || 0), 
-          projectQualityLead: p.projectQualityLead, 
-          detailsProductTestMd: p.detailsProductTestMd, 
-          schedulingStrategy: p.schedulingStrategy,
-          allowedResourceIds: computeAllowedResourceIds(p, false)
-        })).filter(p => p.gap >= 1);
-        if (bTest.length && tIdle.some(r => r.role === '测试工程师')) {
-          const batchAllowedIds = new Set(bTest.flatMap(p => p.allowedResourceIds));
-          const filteredIdle = tIdle.filter(r => r.role === '测试工程师' && batchAllowedIds.has(Number(r.id)));
-          if (filteredIdle.length > 0) {
-            const sug = await suggestAllocationsForBatch(bTest as any, filteredIdle, 'test', false, signal);
-            checkStop();
-            await applySuggestions(sug, 'test', batch, false);
-          }
-        }
-      }
+      // Run Strict Pass
+      await greedyAllocate('dev', false);
+      await greedyAllocate('test', false);
 
-      // PASS 2: Integrity Audit
+      // PASS 2: Integrity Audit (Relaxed Rollback)
+      setCurrentStep(3);
       checkStop();
       setScheduleStatus(`🛡️ 阶段二：完整性审计回滚...`);
-      let retryQueue: any[] = [];
       let didRollback = false;
       const { gaps: aGaps } = runAudit(readyProjects, resources, currentAllocations);
+      
       for (const project of readyProjects) {
         checkStop();
+        if (project.endDate && project.endDate > scheduleMaxDate) {
+          rejectionReasons.set(project.id!, 'partial_window');
+          continue;
+        }
+        
         const g = aGaps.find(pg => Number(pg.id) === Number(project.id));
         if (g && project.devTotalMd > 0 && project.testTotalMd > 0) {
           const devAllocated = project.devTotalMd - g.devGap;
-          const isDevSevereUnderAlloc = (devAllocated < (project.devTotalMd * 0.5)) && g.testGap === project.testTotalMd;
-          if (
-            (g.devGap < project.devTotalMd && g.testGap === project.testTotalMd) || 
-            (g.devGap === project.devTotalMd && g.testGap < project.testTotalMd) ||
-            isDevSevereUnderAlloc
-          ) {
-            currentAllocations = currentAllocations.filter(a => Number(a.projectId) !== Number(project.id) || a.isLocked);
-            const rollbackAllocs = await db.allocations.where({ projectId: project.id! }).toArray();
-            const idsToDelete = rollbackAllocs.filter(a => !a.isLocked).map(a => a.id!);
-            await db.allocations.bulkDelete(idsToDelete);
-            retryQueue.push(project);
-            didRollback = true;
+          const testAllocated = project.testTotalMd - g.testGap;
+          const totalAllocated = devAllocated + testAllocated;
+          const totalRequired = project.devTotalMd + project.testTotalMd;
+          
+          // Relaxed rollback condition: Rollback only if we covered less than 30% of the total needed MD
+          // AND we couldn't fully cover either Dev or Test. 
+          if ((totalAllocated / totalRequired) < 0.3) {
+             currentAllocations = currentAllocations.filter(a => Number(a.projectId) !== Number(project.id) || a.isLocked);
+             const rollbackAllocs = await db.allocations.where({ projectId: project.id! }).toArray();
+             const idsToDelete = rollbackAllocs.filter(a => !a.isLocked).map(a => a.id!);
+             if (idsToDelete.length > 0) {
+               await db.allocations.bulkDelete(idsToDelete);
+               didRollback = true;
+             }
           }
         }
       }
-      // Invalidate the cached calendars ONCE after all rollbacks so PASS 3 rebuilds
-      // from the cleaned-up allocations (avoids O(n\u00b2) matrix rebuilds, #6).
-      if (didRollback) sharedMatrix.clear();
+      
+      if (didRollback) {
+        sharedMatrix.clear(); 
+      }
 
-      // PASS 3: Convergence Loops
-      setCurrentStep(3);
-      let loop = 1;
-      let progress = true;
-      while (progress && loop <= 3) {
-        checkStop();
-        setScheduleStatus(`🌾 阶段三：循环收割 (轮次 ${loop}/3)...`);
-        const startMD = totalAllocatedThisSession;
-        const { gaps: hGaps, idle: hIdle } = runAudit(readyProjects, resources, currentAllocations);
-        if (hGaps.length === 0 || hIdle.length === 0) break;
-        const pool = [...retryQueue, ...readyProjects.filter(p => !retryQueue.includes(p))];
-        const devG = hGaps.map(g => {
-          const p = readyProjects.find(rp => rp.id === g.id);
-          return { 
-            ...g, 
-            gap: Math.ceil(g.devGap), 
-            projectTechLead: p?.projectTechLead, 
-            detailsProductDevMd: p?.detailsProductDevMd, 
-            schedulingStrategy: p?.schedulingStrategy,
-            allowedResourceIds: p ? computeAllowedResourceIds(p, true) : resources.map(r => r.id!)
-          };
-        }).filter(g => g.gap >= 1);
-        const devI = hIdle.filter(r => ['前端工程师', '后端工程师', 'APP工程师', '全栈工程师'].includes(r.role));
-        if (devG.length && devI.length) {
-          const batchAllowedIds = new Set(devG.flatMap(p => p.allowedResourceIds));
-          const filteredIdle = devI.filter(r => batchAllowedIds.has(Number(r.id)));
-          if (filteredIdle.length > 0) {
-            const sug = await suggestAllocationsForBatch(devG as any, filteredIdle, 'dev', true, signal);
-            checkStop();
-            await applySuggestions(sug, 'dev', pool, true);
-          }
-        }
-        checkStop();
-        const { gaps: hGaps2, idle: hIdle2 } = runAudit(readyProjects, resources, currentAllocations);
-        const testG = hGaps2.map(g => {
-          const p = readyProjects.find(rp => rp.id === g.id);
-          return { 
-            ...g, 
-            gap: Math.ceil(g.testGap), 
-            projectQualityLead: p?.projectQualityLead, 
-            detailsProductTestMd: p?.detailsProductTestMd, 
-            schedulingStrategy: p?.schedulingStrategy,
-            allowedResourceIds: p ? computeAllowedResourceIds(p, true) : resources.map(r => r.id!)
-          };
-        }).filter(g => g.gap >= 1);
-        const testI = hIdle2.filter(r => r.role === '测试工程师');
-        if (testG.length && testI.length) {
-          const batchAllowedIds = new Set(testG.flatMap(p => p.allowedResourceIds));
-          const filteredIdle = testI.filter(r => batchAllowedIds.has(Number(r.id)));
-          if (filteredIdle.length > 0) {
-            const sug = await suggestAllocationsForBatch(testG as any, filteredIdle, 'test', true, signal);
-            checkStop();
-            await applySuggestions(sug, 'test', pool, true);
-          }
-        }
-        progress = totalAllocatedThisSession > startMD;
-        loop++;
-      }
+      // Global Relaxed Pass (formerly PASS 3)
+      await greedyAllocate('dev', true);
+      await greedyAllocate('test', true);
 
       // Final Rejection Reason Settlement
       const { gaps: finalGaps, idle: finalIdle } = runAudit(readyProjects, resources, currentAllocations);
@@ -651,7 +567,6 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         if (gap && (gap.devGap > 0.5 || gap.testGap > 0.5)) {
           let reason = rejectionReasons.get(p.id!);
           if (!reason) {
-            // Infer reason from remaining capacity of allowed resources
             const allowed = computeAllowedResourceIds(p, true);
             let devIdle = 0;
             let testIdle = 0;
@@ -659,7 +574,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
               const r = resources.find(x => x.id === rId);
               const rI = finalIdle.find(x => x.id === rId);
               if (r && rI) {
-                if (r.role === '测试工程师') testIdle += rI.idleMd;
+                if (['测试工程师', '测试组长'].includes(r.role)) testIdle += rI.idleMd;
                 else devIdle += rI.idleMd;
               }
             });
@@ -675,7 +590,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
       }
 
       setCurrentStep(4);
-      setScheduleStatus('✨ 方案 A 像素级调度完成！');
+      setScheduleStatus('✨ 确定性排期调度完成！');
       console.groupEnd();
       setTimeout(() => { if (!stopRequestedRef.current) { setScheduleStatus(''); setCurrentStep(0); } }, 5000);
     } catch (err: any) {

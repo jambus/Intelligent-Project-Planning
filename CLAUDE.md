@@ -28,9 +28,10 @@ Chrome Extension (Manifest V3) — Local-first R&D resource scheduler with AI-po
 - **`extension/src/utils/`** — Chrome storage wrapper, date/working-day utilities
 
 ### Key Architecture Decisions
-- **Step-by-Step Deduction Scheduling** (Phase 6): AI is called per-project (not global), and JS enforces hard caps via `Math.min(aiSuggestion, projectGap, resourceIdle)` — guarantees no overallocation
+- **Step-by-Step Deduction Scheduling** (Phase 6): AI is called per-project (not global), and JS enforces hard caps via `Math.min(aiSuggestion, projectGap, resourceIdle)` — guarantees no overallocation. **One task per day**: each person can only work on one task (ops or project) per day; weekly schedule values are always integers (no decimals). Multiple projects CAN share a week (different days), but never share a single day.
+- **Fuzzy date import**: `normalizeDateField()` in `fileImport.ts` auto-normalizes informal CSV dates ("Apr", "Q3", "Jun (UAT...)") to ISO format. StartDate → 1st of month, EndDate → last day of month.
 - **Priority = insertion order**: CSV import order determines project priority (auto-increment DB ID). No manual sort in UI.
-- **5 standard roles**: 前端/后端/APP/全栈 → dev work only; 测试工程师 → test work only
+- **7 standard roles**: 前端/后端/APP/全栈/开发组长 → dev work only; 测试工程师/测试组长 → test work only
 - **Data stored in**: `chrome.storage.local` for config/API keys, IndexedDB (via Dexie) for business data
 - **Holidays hardcoded** in `dateUtils.ts` for 2026 — will need maintenance for future years. Scheduling also loads user-defined holidays via `loadHolidaysConfig()` from `db.settings` before building the working-day set.
 - **API keys never hardcoded** — read from `chrome.storage.local` via the storage utility
@@ -42,4 +43,4 @@ Chrome Extension (Manifest V3) — Local-first R&D resource scheduler with AI-po
 Every code modification MUST be followed by `npm run build` succeeding. The task is not complete until the build and packaging pass.
 
 ### Single Source of Truth
-`docs/intelligent-resource-planner.md` contains the PRD and architecture. Update it when adding features or changing design.
+`docs/requirement.md` contains the PRD and architecture. Update it when adding features or changing design.

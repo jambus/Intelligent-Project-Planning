@@ -38,7 +38,9 @@ export const Resources = () => {
     '前端工程师',
     '后端工程师',
     '全栈工程师',
-    '测试工程师'
+    '开发组长',
+    '测试工程师',
+    '测试组长'
   ];
 
   const handleOpenAdd = () => {
@@ -253,10 +255,12 @@ export const Resources = () => {
                 </td>
                 <td className="p-4">
                   <span className={`px-2.5 py-1 rounded-md text-[10px] font-black border uppercase ${
-                    r.role === '测试工程师' 
+                    ['测试工程师', '测试组长'].includes(r.role)
                       ? 'bg-teal-50 text-teal-700 border-teal-100' 
                       : r.role === '全栈工程师'
                       ? 'bg-purple-50 text-purple-700 border-purple-100'
+                      : ['开发组长', '测试组长'].includes(r.role)
+                      ? 'bg-amber-50 text-amber-700 border-amber-100'
                       : 'bg-blue-50 text-blue-700 border-blue-100'
                   }`}>
                     {r.role}

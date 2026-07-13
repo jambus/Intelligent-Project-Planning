@@ -158,7 +158,7 @@ export const syncEpicLoggedHours = async (epicKeys: string[], roster: RosterMemb
       if (t) tokens.push(t);                                  // matched against display name / email-prefix
     });
     if (exactIds.length === 0 && tokens.length === 0) return;
-    (m.role === '测试工程师' ? testMatchers : devMatchers).push({ exactIds, tokens });
+    (['测试工程师', '测试组长'].includes(m.role) ? testMatchers : devMatchers).push({ exactIds, tokens });
   });
   // Only collect unmatched authors when a roster is actually configured; otherwise
   // every author would be "unmatched" and flood the prompt.

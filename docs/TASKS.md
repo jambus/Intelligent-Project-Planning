@@ -54,7 +54,7 @@
     - [x] 6.3.2 动态计算精确的起止日期，落库并扣减池子余额。
 - [x] **DONE** 6.4 **交互与文档同步 (UI & Docs)**
     - [x] 6.4.1 更新大盘排期按钮的 Loading 状态，展示「正在处理项目 X...」的进度流。
-    - [x] 6.4.2 更新 `docs/intelligent-resource-planner.md` 的架构设计图与逻辑说明。
+    - [x] 6.4.2 更新 `docs/requirement.md` 的架构设计图与逻辑说明。
 
 ## 阶段七：AI 排期精准度与资源利用率优化 (Phase 7: AI Scheduling Precision & Resource Optimization)
 
@@ -229,7 +229,7 @@
 
 ## 阶段二十：调度引擎性能与准确性优化 (Phase 20: Scheduling Engine Optimization)
 
-> 来源：2026-05-09 代码审查，关联架构文档：`docs/intelligent-resource-planner.md § 3.3.8`
+> 来源：2026-05-09 代码审查，关联架构文档：`docs/requirement.md § 3.3.8`
 
 ### P0 — 立即执行（性能，直接影响使用体验）
 
@@ -314,7 +314,7 @@
 ### P2 — 文档归档 (Docs)
 
 - [x] **DONE** **21.5 [DOC-01] 更新 PRD 与 Changelog**
-    - [x] 21.5.1 同步 3.3.9 和 3.3.10 章节至 `intelligent-resource-planner.md`。
+    - [x] 21.5.1 同步 3.3.9 和 3.3.10 章节至 `requirement.md`。
     - [x] 21.5.2 更新 `CHANGELOG.md` 归档 v1.0.3 变更。
 
 ## 阶段二十二：v1.0.4 迭代开启 (Phase 22: Version 1.0.4 Initialization)
@@ -344,7 +344,7 @@
     - [x] 23.3.1 更新 `SchedulingContext.tsx`，在计算 `devGap` 和 `testGap` 时动态扣减已录入工时。
     - [x] 23.3.2 同样更新大盘仪表盘 (`Dashboard.tsx`)，让可视化审计表也能反映净缺口。
 - [x] **DONE** **23.4 [DOC-01] 文档归档**
-    - [x] 23.4.1 更新 `intelligent-resource-planner.md` 的 3.3.12 章节。
+    - [x] 23.4.1 更新 `requirement.md` 的 3.3.12 章节。
     - [x] 23.4.2 更新 `CHANGELOG.md` 补充新特性。
 
 ## 阶段二十四：Jira 同步范围时间窗口限制 (Phase 24: Jira Sync Time Window Restriction)
@@ -354,11 +354,11 @@
 - [x] **DONE** **24.1 [JIRA-04] Epic 创建时间过去一年限制**
     - [x] 24.1.1 在 `services/jira.ts` 的模糊搜索 JQL 中已添加 `created >= -365d` 的限制（第 124-126 行）。当前架构已统一为模糊搜索路径（所有 Epic Key 均通过 `summary ~ "key*"` 查询），不再区分 `standardKeys` 和 `fuzzyNames` 两条路径。
     - [x] 24.1.2 编译验证通过。
-    - [x] 24.1.3 PRD `docs/intelligent-resource-planner.md` § 3.3.12 第 6 条已包含此功能说明。
+    - [x] 24.1.3 PRD `docs/requirement.md` § 3.3.12 第 6 条已包含此功能说明。
 
 ## 阶段二十五：Jira 工时扣减与排期逻辑优化 (Phase 25: Jira Hours Deduction & Scheduling Logic Enhancement)
 
-> 来源：2026-05-24 代码审计，关联架构文档：`docs/intelligent-resource-planner.md § 3.3.12`
+> 来源：2026-05-24 代码审计，关联架构文档：`docs/requirement.md § 3.3.12`
 
 ### P0 — 已完成功能归档 (Completed Features Archive)
 
@@ -427,7 +427,7 @@
 
 ## 阶段二十八：v1.0.5 排期精准度与健壮性加固 (Phase 28: Precision & Robustness Hardening)
 
-> 来源：2026-05 排期逻辑代码审查，关联架构文档：`docs/intelligent-resource-planner.md § 3.3.13`
+> 来源：2026-05 排期逻辑代码审查，关联架构文档：`docs/requirement.md § 3.3.13`
 
 ### P0 — 核心引擎精准度 (Core Engine Precision)
 
@@ -526,14 +526,13 @@
     - [x] 29.8.2 手动验证：排期 → 导出 → 手工编辑 → 导入 → 结果一致。
 
 - [x] **29.9 [DOC-01] 文档更新**
-    - [x] 29.9.1 更新 `docs/intelligent-resource-planner.md` 新增导出/导入章节。
+    - [x] 29.9.1 更新 `docs/requirement.md` 新增导出/导入章节。
     - [x] 29.9.2 更新 `CHANGELOG.md`。
-### 新增特性 (v1.0.9 - 排期矩阵在线编辑)
+### 新增特性 (v1.0.8 - 高级排期编辑与锁定)
 - [x] **排期矩阵在线手工编辑**
   - 在 Schedule Details 页面，用户可直接点击空白或已有排期单元格，将其转换为 `<input>` 并进行直接编辑。
   - 通过 `updateWeeklyAllocation` 实现底层的精准覆盖、边界切分以及响应式 IndexedDB 事务。
   - 按下 `Enter` 或触发 `Blur` 自动触发保存操作，全局重绘矩阵与资源利用率大盘。
-### 新增特性 (v1.0.10 - 高级排期矩阵编辑与锁定)
 - [x] **新增排期行功能**
   - 在 Schedule Details 顶部操作区新增 `+ 新增排期` 按钮。
   - 支持通过弹窗快速指定人员、项目、目标周和投入人天，从而从无到有生成全新的排期矩阵行。
@@ -544,3 +543,64 @@
   - 排期行首新增 `Lock/Unlock` 切换图标（支持锁定/解锁当前行的排期）。
   - AI 排期的全量大清洗（一键排期）和项目失败回滚（完整性审计回滚）逻辑中，增加对 `isLocked` 为 `true` 的数据进行免疫保护。
   - 手工换人、调整或新增产生的排期数据自动继承对应行的锁定状态。
+
+## 阶段三十：排期引擎利用率深度优化 (Phase 30: Scheduling Engine Utilization Deep Optimization)
+
+> 来源：2026-06-15 测试数据分析，排期后利用率仅 38.7%（237.5 / 614 MD）。  
+> 核心发现：17 名工程师完全空闲，11 个有工时的项目未被排入，根因为周独占约束 + 日期解析不兼容 + 大项目回滚浪费。
+
+### P0 — 关键修复（预期利用率 39% → 70%+）
+
+- [x] **30.1 [EXCL-01] 移除/放宽周独占约束 (Weekly Exclusivity Relaxation)**
+    - [x] 30.1.1 在 `SchedulingContext.tsx` 的 `findEarliestFitDate` 中，移除 `assignedNonOpProjects` 阻塞逻辑：当前一个人同一周只能服务一个项目，即使仅占 50% 也锁死整周，导致另外 50% 完全浪费。
+    - [x] 30.1.2 在 `applySuggestions` 的日期截断逻辑中，移除基于 `assignedNonOpProjects` 的 truncation — 允许同一人同一周内并行服务多个项目。
+    - [x] 30.1.3 保留 `DailySlot.available` 百分比检查作为唯一产能约束（即只要当日剩余 ≥ 所需百分比即可排入）。
+    - [x] 30.1.4 移除 `DailySlot` 结构中的 `assignedNonOpProjects` 字段及相关维护代码（`updateResourceCalendar` 中的 occupiedWeeks 逻辑、`getResourceCalendar` 中的 populate 逻辑）。
+    - [x] 30.1.5 执行 `npm run build` 验证通过；手动对比排期结果，确认同一人可跨项目并行且无超 100% 分配。
+
+- [x] **30.2 [DATE-03] 项目日期模糊解析 (Fuzzy Date Parsing)**
+    - [x] 30.2.1 在 `services/fileImport.ts` 新增 `normalizeDateField(value: string, selectedYear?: number): string` 函数，支持以下格式转 ISO date：
+        - `"Apr"` / `"April"` → `"2026-04-01"`
+        - `"Q2"` / `"Q3"` → 季度首日 `"2026-04-01"` / `"2026-07-01"`
+        - `"Jun (UAT done at the end of Jun)"` → 提取首个月份 → `"2026-06-01"`
+        - `"March"` → `"2026-03-01"`
+        - `"May"` → `"2026-05-01"`（end 字段自动取月末 `"2026-05-31"`）
+        - 已有 ISO 格式 `"2026-04-01"` → 原样保留
+    - [x] 30.2.2 在 `importProjectsFromFile` 中对 `startDate` 和 `endDate` 调用 `normalizeDateField`，确保入库时为有效 ISO 日期。
+    - [x] 30.2.3 对 `endDate` 字段，当仅解析到月份时取该月最后一天（如 "Jun" → `"2026-06-30"`）。
+    - [x] 30.2.4 执行 `npm run build` 验证通过；用测试 CSV 导入后确认项目日期均为有效 ISO 格式。
+
+### P1 — 重要改进（避免大项目浪费 + 释放碎片容量）
+
+- [x] **30.3 [ROLLBACK-01] 放宽 PASS 2 回滚条件 — 允许大项目部分排期**
+    - [x] 30.3.1 在 PASS 2 完整性审计中，对 `endDate > scheduleMaxDate` 的项目（即项目交付周期超出排期窗口）跳过回滚判断，允许仅排 dev 而 test 延后。
+    - [x] 30.3.2 新增判定条件：仅当项目 `endDate` 在排期窗口内（即完整可排）时才执行完整性审计回滚。
+    - [x] 30.3.3 在 `rejectionReason` 中新增 `'partial_window'` 状态，表示"项目跨窗口，已部分排期"。
+    - [x] 30.3.4 执行 `npm run build` 验证通过。
+
+- [x] **30.4 [OPS-01] 产品运维改为百分比分摊模式**
+    - [x] 30.4.1 当前 ops 按整天占位（`allocationPercentage = 100%`），即使只需 1 MD/月也占满一整天。改为：计算 `monthlyMd / totalWorkingDays × 100` 得出每日百分比，按分摊模式排入整月。
+    - [x] 30.4.2 对于 `monthlyMd ≤ 5` 的小型 ops，改为集中排入 1-2 整天（现有逻辑），避免百分比过小（<5%）导致矩阵展示为 0。
+    - [x] 30.4.3 对于 `monthlyMd > 5` 的大型 ops（如 OMS 24 MD/月），按 `24/21 ≈ 115% → cap at 100%` 分摊全月，效果等于该人全月全部归属 ops。此场景需提醒用户 ops 配置过大。
+    - [x] 30.4.4 执行 `npm run build` 验证通过；对比运维占用前后的可用容量差异。
+
+### P2 — 体验与准确性
+
+- [x] **30.5 [WINDOW-01] 排期窗口建议与自动多月扩展**
+    - [x] 30.5.1 在 Dashboard 一键排期前，若项目总需求 > 排期窗口总容量的 80%，弹出提示："当前需求 X MD 远超单月容量 Y MD，建议扩展排期范围至 N 个月"。
+    - [ ] 30.5.2 提供"自动最优窗口"按钮：根据项目 `startDate`~`endDate` 的范围自动推荐 `startMonth`~`endMonth`。
+
+- [x] **30.6 [TEAM-01] Scrum Team 约束诊断报告**
+    - [x] 30.6.1 排期完成后，在 Dashboard 新增"约束诊断"折叠面板，展示：被 Scrum Team 约束阻止的项目 + 对应可用但被限制的人员列表。
+    - [ ] 30.6.2 提供"一键放开至 all-in"的快捷操作，允许用户手动解除约束后重排。
+
+### P3 — 验证与文档
+
+- [x] **30.7 [BUILD-01] 全流程验证**
+    - [ ] 30.7.1 使用 `testdata/` 中的测试数据执行完整排期流程，对比优化前后利用率。
+    - [x] 30.7.2 执行 `npm run build` 确保通过。
+
+- [x] **30.8 [DOC-01] 文档更新**
+    - [ ] 30.8.1 更新 `docs/intelligent-resource-planner.md` 记录周独占移除、模糊日期解析等架构变更。
+    - [x] 30.8.2 更新 `CHANGELOG.md`。
+    - [ ] 30.8.3 更新 `AGENTS.md` / `CLAUDE.md` 中周独占相关的避坑提示（移除或标记为已废弃）。
