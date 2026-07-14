@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.10] - 2026-07-14
+
+### 开发中 (In Development)
+- 初始化 1.0.10 迭代开发环境准备。
+
 ## [1.0.9] - 2026-07-13
 
 ### 确定性贪心调度与AI职责降级 (Deterministic Greedy Scheduling & AI Downgrade)
