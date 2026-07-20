@@ -9,7 +9,7 @@ import {
   getResourceIdleMd,
   type ResourceCalendars,
 } from './calendar.ts';
-import { DEV_ROLES, TEST_ROLES, findEarliestFitWindow, getAllowedResourceIds, getEligibleResources, type SchedulingPhase } from './constraints.ts';
+import { DEV_ROLES, TEST_ROLES, findAllFitWindows, getAllowedResourceIds, getEligibleResources, type FitWindow, type SchedulingPhase } from './constraints.ts';
 
 export type PlannedAllocation = Omit<Allocation, 'id'>;
 
@@ -29,6 +29,7 @@ export interface SchedulePlan {
   generatedAllocations: PlannedAllocation[];
   rejectionReasons: Map<number, string>;
   priorityInversions: number;
+  residualAllocations: number;
 }
 
 const getProjectGap = (
@@ -150,49 +151,127 @@ export const generateSchedulePlan = (input: SchedulePlanInput): SchedulePlan => 
     return scoresByPhase[phase].find(score => score.projectId === projectId && score.resourceId === resourceId)?.score || 0;
   };
 
-  const allocatePhase = (projects: Project[], phase: SchedulingPhase, relaxed: boolean): number => {
-    let added = 0;
-    projects.forEach(project => {
-      if (project.id === undefined) return;
-      const gap = getProjectGap(project, input.resources, allocations, input.workingDaySet);
-      let targetGap = phase === 'dev' ? gap.devGap : gap.testGap;
-      if (targetGap <= 0.5) return;
+  const phaseGap = (project: Project, phase: SchedulingPhase): number => {
+    const gap = getProjectGap(project, input.resources, allocations, input.workingDaySet);
+    return phase === 'dev' ? gap.devGap : gap.testGap;
+  };
 
+  const earliestDateFor = (project: Project, phase: SchedulingPhase): string => {
+    if (phase === 'dev') return project.startDate || input.rangeStart;
+    return calculateTestStartDate(project.id!, allocations, project.startDate || input.rangeStart, input.workingDaySet);
+  };
+
+  const fragmentFit = (windows: FitWindow[], targetDays: number) => {
+    const totalDays = windows.reduce((sum, window) => sum + window.dates.length, 0);
+    const smallestSufficient = windows
+      .filter(window => window.dates.length >= targetDays)
+      .reduce<number | null>((smallest, window) => smallest === null
+        ? window.dates.length
+        : Math.min(smallest, window.dates.length), null);
+    return {
+      insufficient: totalDays < targetDays ? 1 : 0,
+      waste: smallestSufficient === null ? Math.max(0, targetDays - totalDays) : smallestSufficient - targetDays,
+      totalDays,
+    };
+  };
+
+  const allocatePhaseRound = (projects: Project[], phase: SchedulingPhase, relaxed: boolean): number => {
+    const activeProjects = projects.filter(project => project.id !== undefined && phaseGap(project, phase) > 0.5);
+    if (activeProjects.length === 0) return 0;
+
+    const candidateCount = (project: Project) => getEligibleResources(project, input.resources, phase, relaxed)
+      .filter(resource => resource.id !== undefined
+        && getResourceIdleMd(calendars.get(resource.id) || []) > 0
+        && findAllFitWindows(calendars.get(resource.id) || [], project.id!, earliestDateFor(project, phase)).length > 0)
+      .length;
+    const orderedProjects = [...activeProjects].sort((a, b) => candidateCount(a) - candidateCount(b) || a.id! - b.id!);
+    const usableResourceIds = new Set<number>();
+    activeProjects.forEach(project => {
+      getEligibleResources(project, input.resources, phase, relaxed).forEach(resource => {
+        if (resource.id !== undefined && getResourceIdleMd(calendars.get(resource.id) || []) > 0) {
+          usableResourceIds.add(resource.id);
+        }
+      });
+    });
+    const totalIdleMd = Array.from(usableResourceIds).reduce(
+      (sum, resourceId) => sum + getResourceIdleMd(calendars.get(resourceId) || []),
+      0,
+    );
+    const fairShareMd = Math.max(1, Math.floor(totalIdleMd / activeProjects.length));
+    let added = 0;
+
+    orderedProjects.forEach(project => {
+      if (project.id === undefined) return;
+      const targetGap = phaseGap(project, phase);
+      if (targetGap <= 0.5) return;
+      const turnTarget = Math.min(Math.ceil(targetGap), fairShareMd);
       const leadName = phase === 'dev' ? project.projectTechLead : project.projectQualityLead;
+
       const candidates = getEligibleResources(project, input.resources, phase, relaxed)
-        .filter(resource => resource.id !== undefined && getResourceIdleMd(calendars.get(resource.id) || []) > 0)
+        .flatMap(resource => {
+          if (resource.id === undefined) return [];
+          const calendar = calendars.get(resource.id) || [];
+          const idleMd = getResourceIdleMd(calendar);
+          const windows = findAllFitWindows(calendar, project.id!, earliestDateFor(project, phase));
+          if (idleMd <= 0 || windows.length === 0) return [];
+          const alternativeProjects = activeProjects.filter(other => other.id !== undefined
+            && getAllowedResourceIds(other, input.resources, relaxed).has(resource.id!)
+            && getEligibleResources(other, [resource], phase, relaxed).length > 0).length;
+          return [{
+            resource,
+            windows,
+            idleMd,
+            alternativeProjects,
+            fit: fragmentFit(windows, turnTarget),
+          }];
+        })
         .sort((a, b) => {
-          const scoreDifference = scoreFor(project.id!, b.id!, phase) - scoreFor(project.id!, a.id!, phase);
+          if (a.alternativeProjects !== b.alternativeProjects) return a.alternativeProjects - b.alternativeProjects;
+          if (a.fit.insufficient !== b.fit.insufficient) return a.fit.insufficient - b.fit.insufficient;
+          if (a.fit.waste !== b.fit.waste) return a.fit.waste - b.fit.waste;
+          const scoreDifference = scoreFor(project.id!, b.resource.id!, phase) - scoreFor(project.id!, a.resource.id!, phase);
           if (scoreDifference !== 0) return scoreDifference;
-          const leadDifference = Number(b.name === leadName) - Number(a.name === leadName);
-          return leadDifference || (a.id! - b.id!);
+          const leadDifference = Number(b.resource.name === leadName) - Number(a.resource.name === leadName);
+          if (leadDifference !== 0) return leadDifference;
+          const dateDifference = a.windows[0].dates[0].localeCompare(b.windows[0].dates[0]);
+          return dateDifference || a.resource.id! - b.resource.id!;
         });
 
-      candidates.forEach(resource => {
-        if (targetGap <= 0.5 || resource.id === undefined) return;
-        const calendar = calendars.get(resource.id) || [];
-        const earliestDate = phase === 'test'
-          ? calculateTestStartDate(project.id!, allocations, project.startDate || input.rangeStart, input.workingDaySet)
-          : project.startDate || input.rangeStart;
-        const window = findEarliestFitWindow(calendar, project.id!, earliestDate);
-        const idleMd = getResourceIdleMd(calendar);
-        const days = Math.min(window.dates.length, idleMd, Math.ceil(targetGap));
-        if (days <= 0) return;
+      const selected = candidates[0];
+      if (!selected) return;
+      let daysRemaining = Math.min(turnTarget, selected.idleMd, selected.fit.totalDays);
+      const sufficientWindow = selected.windows
+        .filter(window => window.dates.length >= daysRemaining)
+        .sort((a, b) => a.dates.length - b.dates.length || a.dates[0].localeCompare(b.dates[0]))[0];
+      const windowsToUse = sufficientWindow ? [sufficientWindow] : selected.windows;
 
-        const allocation: PlannedAllocation = {
-          resourceId: resource.id,
-          projectId: project.id!,
+      for (const window of windowsToUse) {
+        if (daysRemaining <= 0) break;
+        const days = Math.min(daysRemaining, window.dates.length);
+        addAllocation({
+          resourceId: selected.resource.id!,
+          projectId: project.id,
           allocationPercentage: 100,
           startDate: window.dates[0],
           endDate: window.dates[days - 1],
           allocationType: phase,
-        };
-        addAllocation(allocation, allocations, generated, calendars);
-        targetGap -= days;
+        }, allocations, generated, calendars);
+        daysRemaining -= days;
         added++;
-      });
+      }
     });
     return added;
+  };
+
+  const converge = (projects: Project[], relaxed: boolean): number => {
+    const maxIterations = Math.max(1, input.workingDaySet.size * input.resources.length);
+    let totalAdded = 0;
+    for (let iteration = 0; iteration < maxIterations; iteration++) {
+      const added = allocatePhaseRound(projects, 'dev', relaxed) + allocatePhaseRound(projects, 'test', relaxed);
+      totalAdded += added;
+      if (added === 0) break;
+    }
+    return totalAdded;
   };
 
   const sortedProjects = input.projects.filter(project => project.id !== undefined).sort(compareProjectsByPriority);
@@ -205,8 +284,7 @@ export const generateSchedulePlan = (input: SchedulePlanInput): SchedulePlan => 
 
   Array.from(priorityGroups.keys()).sort((a, b) => b - a).forEach(weight => {
     const projects = priorityGroups.get(weight)!;
-    allocatePhase(projects, 'dev', false);
-    allocatePhase(projects, 'test', false);
+    converge(projects, false);
 
     const rollbackIds = new Set<number>();
     projects.forEach(project => {
@@ -226,11 +304,13 @@ export const generateSchedulePlan = (input: SchedulePlanInput): SchedulePlan => 
       calendars = buildResourceCalendars(input.resources, allocations, input.workingDaySet);
     }
 
-    const maxIterations = Math.max(1, input.workingDaySet.size * input.resources.length);
-    for (let iteration = 0; iteration < maxIterations; iteration++) {
-      const added = allocatePhase(projects, 'dev', true) + allocatePhase(projects, 'test', true);
-      if (added === 0) break;
-    }
+    converge(projects, true);
+  });
+
+  const primaryAllocationCount = generated.length;
+  let residualAllocations = 0;
+  Array.from(priorityGroups.keys()).sort((a, b) => b - a).forEach(weight => {
+    residualAllocations += converge(priorityGroups.get(weight)!, true);
   });
 
   const rejectionReasons = new Map<number, string>();
@@ -265,7 +345,7 @@ export const generateSchedulePlan = (input: SchedulePlanInput): SchedulePlan => 
   const projectWeights = new Map(input.projects.flatMap(project => (
     project.id === undefined ? [] : [[project.id, getPriorityWeight(project.priority)] as const]
   )));
-  const allocationWeights = generated
+  const allocationWeights = generated.slice(0, primaryAllocationCount)
     .filter(allocation => allocation.projectId > 0)
     .map(allocation => projectWeights.get(allocation.projectId) || 0);
   let priorityInversions = 0;
@@ -275,5 +355,5 @@ export const generateSchedulePlan = (input: SchedulePlanInput): SchedulePlan => 
     }
   });
 
-  return { generatedAllocations: generated, rejectionReasons, priorityInversions };
+  return { generatedAllocations: generated, rejectionReasons, priorityInversions, residualAllocations };
 };

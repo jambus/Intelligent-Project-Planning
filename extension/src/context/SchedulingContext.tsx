@@ -2,6 +2,7 @@ import { createContext, useContext, useRef, useState, type ReactNode } from 'rea
 import { db } from '../db';
 import { fetchAIScores } from '../services/ai';
 import { generateSchedulePlan } from '../scheduling/engine';
+import { commitSchedulePlanToDb } from '../scheduling/commit';
 import { DEV_ROLES, TEST_ROLES } from '../scheduling/constraints';
 import { computeProjectGaps } from '../utils/audit';
 import { buildWorkingDaySet, formatLocalDate } from '../utils/dateUtils';
@@ -109,15 +110,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
 
       setCurrentStep(3);
       setScheduleStatus('🛡️ 正在验证并写入排期结果...');
-      if (prepared.idsToDelete.length > 0) {
-        await db.allocations.bulkDelete(prepared.idsToDelete);
-      }
-      if (plan.generatedAllocations.length > 0) {
-        await db.allocations.bulkAdd(plan.generatedAllocations);
-      }
-      await Promise.all(Array.from(plan.rejectionReasons, ([projectId, rejectionReason]) => (
-        db.projects.update(projectId, { rejectionReason })
-      )));
+      await commitSchedulePlanToDb(prepared.idsToDelete, plan);
 
       setCurrentStep(4);
       setScheduleStatus('✨ 确定性优先级排期完成！');

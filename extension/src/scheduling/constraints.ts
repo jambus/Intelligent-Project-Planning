@@ -48,12 +48,13 @@ export interface FitWindow {
   dates: string[];
 }
 
-export const findEarliestFitWindow = (
+export const findAllFitWindows = (
   calendar: DailySlot[],
   projectId: number,
   earliestDate: string,
-): FitWindow => {
+): FitWindow[] => {
   const remainingCapacity = getMonthlyRemainingCapacityDays(calendar);
+  const windows: FitWindow[] = [];
   let dates: string[] = [];
 
   for (const slot of calendar) {
@@ -68,9 +69,20 @@ export const findEarliestFitWindow = (
       remainingCapacity.set(slot.monthKey, monthRemaining - 1);
       continue;
     }
-    if (dates.length > 0) break;
-    dates = [];
+    if (dates.length > 0) {
+      windows.push({ dates });
+      dates = [];
+    }
   }
 
-  return { dates };
+  if (dates.length > 0) windows.push({ dates });
+  return windows;
+};
+
+export const findEarliestFitWindow = (
+  calendar: DailySlot[],
+  projectId: number,
+  earliestDate: string,
+): FitWindow => {
+  return findAllFitWindows(calendar, projectId, earliestDate)[0] || { dates: [] };
 };
