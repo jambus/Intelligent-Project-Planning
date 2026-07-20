@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { getWeeksInRange, calculateWeeklyMD, buildWorkingDaySet } from '../utils/dateUtils';
 import { computeProjectGaps } from '../utils/audit';
+import { getMonthlyCapacityDays } from '../utils/capacity';
 
 export interface DashboardContextType {
   selectedYear: number;
@@ -92,12 +93,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         });
       });
 
-      const leaveDays = new Set(Array.isArray(r.unavailableDates) ? r.unavailableDates : []);
-      let activeWorkingDays = 0;
-      currentWorkingDaySet.forEach(d => {
-        if (!leaveDays.has(d)) activeWorkingDays++;
-      });
-      const capacityMd = (activeWorkingDays * r.capacity) / 100;
+      const leaveDays = new Set<string>(Array.isArray(r.unavailableDates) ? r.unavailableDates : []);
+      const capacityMd = Array.from(getMonthlyCapacityDays(currentWorkingDaySet, leaveDays, r.capacity).values())
+        .reduce((sum, days) => sum + days, 0);
       const utilization = capacityMd > 0 ? (totalAllocatedMdInRange / capacityMd) * 100 : 0;
       return { ...r, idleMd: Math.max(0, capacityMd - totalAllocatedMdInRange), allocatedMd: totalAllocatedMdInRange, capacityMd, utilization };
     });

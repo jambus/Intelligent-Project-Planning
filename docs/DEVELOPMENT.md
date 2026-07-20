@@ -32,7 +32,13 @@
     npm run dev
     ```
 
-4.  **在 Chrome 中加载插件**:
+4.  **运行自动化回归测试**:
+    ```bash
+    npm test
+    ```
+    测试使用 Node.js 内置的 `node:test` 运行器，覆盖排期优先级、锁定数据保留与容量 MD 换算等纯逻辑。
+
+5.  **在 Chrome 中加载插件**:
     *   打开 Chrome 浏览器，在地址栏输入 `chrome://extensions/` 并回车。
     *   开启页面右上角的 **“开发者模式” (Developer mode)**。
     *   点击左上角的 **“加载已解压的扩展程序” (Load unpacked)**。

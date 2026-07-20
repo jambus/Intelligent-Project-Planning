@@ -3,6 +3,9 @@ import { db } from '../db';
 import { fetchAIScores } from '../services/ai';
 import { calculateEndDate, isValidDateStr, getWorkingDays, formatLocalDate, buildWorkingDaySet, getISOWeekYear, getWeekNumber } from '../utils/dateUtils';
 import { computeProjectGaps } from '../utils/audit';
+import { getMonthlyCapacityDays } from '../utils/capacity';
+import { compareProjectsByPriority } from '../utils/priority';
+import { prepareExistingAllocations } from '../utils/schedulingPreparation';
 
 interface SchedulingContextType {
   isScheduling: boolean;
@@ -24,11 +27,13 @@ export const useScheduling = () => {
 
 interface DailySlot {
   date: string;
+  monthKey: string;
   totalCapacity: number;
   usedCapacity: number;
   available: number;
   assignedNonOpProjects: Set<number>;
   weekKey: string;
+  monthlyCapacityDays: number;
 }
 
 export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
@@ -101,17 +106,14 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
       console.group('🚀 确定性排期引擎启动 (混合 AI 打分)');
       setCurrentStep(1);
       setScheduleStatus('🚀 构建基础矩阵与 AI 打分...');
-      if (shouldClear) {
-        const allIds = await db.allocations.toArray();
-        const unlockedIds = allIds.filter(a => !a.isLocked).map(a => a.id!);
-        await db.allocations.bulkDelete(unlockedIds);
+      const existingAllocations = await db.allocations.toArray();
+      const preparedAllocations = prepareExistingAllocations(existingAllocations, shouldClear);
+      if (preparedAllocations.idsToDelete.length > 0) {
+        await db.allocations.bulkDelete(preparedAllocations.idsToDelete);
       }
       checkStop();
 
-      let currentAllocations: any[] = [];
-      if (!shouldClear) {
-        currentAllocations = await db.allocations.toArray();
-      }
+      let currentAllocations: any[] = preparedAllocations.retained;
       
       let totalAllocatedThisSession = 0;
       const sharedMatrix = new Map<number, DailySlot[]>();
@@ -122,15 +124,17 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         let current = new Date(rangeStart);
         const resAllocs = currentAllocs.filter(a => Number(a.resourceId) === Number(res.id));
         const leaveDays: Set<string> = new Set(Array.isArray(res.unavailableDates) ? res.unavailableDates : []);
+        const monthlyCapacityDays = getMonthlyCapacityDays(workingDaySet, leaveDays, res.capacity);
         
         while (current <= rangeEnd) {
           const dateStr = formatLocalDate(current);
           if (workingDaySet.has(dateStr)) {
             const onLeave = leaveDays.has(dateStr);
-            const dayCapacity = onLeave ? 0 : res.capacity;
+            const dayCapacity = onLeave ? 0 : 100;
             let used = 0;
             const assignedNonOpProjects = new Set<number>();
             const weekKey = `${getISOWeekYear(current)}-W${getWeekNumber(current)}`;
+            const monthKey = dateStr.slice(0, 7);
             
             resAllocs.forEach(a => {
               if (dateStr >= a.startDate && dateStr <= a.endDate) {
@@ -142,11 +146,13 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
             });
             calendar.push({
               date: dateStr,
+              monthKey,
               totalCapacity: dayCapacity,
               usedCapacity: used,
               available: Math.max(0, dayCapacity - used),
               assignedNonOpProjects,
               weekKey,
+              monthlyCapacityDays: monthlyCapacityDays.get(monthKey) || 0,
             });
           }
           current.setDate(current.getDate() + 1);
@@ -176,8 +182,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           calendar.forEach(slot => {
             if (slot.date >= newAlloc.startDate && slot.date <= newAlloc.endDate) {
                slot.usedCapacity += newAlloc.allocationPercentage;
-               const res = resources.find(r => r.id === resId);
-               slot.available = Math.max(0, (res?.capacity || 100) - slot.usedCapacity);
+               slot.available = Math.max(0, slot.totalCapacity - slot.usedCapacity);
                affectedWeeks.add(slot.weekKey);
             }
           });
@@ -192,6 +197,22 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         }
       };
 
+      const getMonthlyRemainingCapacityDays = (calendar: DailySlot[]) => {
+        const remaining = new Map<string, number>();
+        const occupiedDays = new Map<string, number>();
+
+        calendar.forEach(slot => {
+          remaining.set(slot.monthKey, slot.monthlyCapacityDays);
+          if (slot.usedCapacity > 0) {
+            occupiedDays.set(slot.monthKey, (occupiedDays.get(slot.monthKey) || 0) + 1);
+          }
+        });
+        occupiedDays.forEach((used, monthKey) => {
+          remaining.set(monthKey, Math.max(0, (remaining.get(monthKey) || 0) - used));
+        });
+        return remaining;
+      };
+
       const runAudit = (currentProjs: any[], currentRes: any[], currentAllocs: any[]) => {
         const gaps = computeProjectGaps(currentProjs, currentRes, currentAllocs, workingDaySet)
           .filter(p => Math.ceil(p.devGap) >= 1 || Math.ceil(p.testGap) >= 1);
@@ -199,10 +220,20 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         const idle = currentRes.map(r => {
           const calendar = getResourceCalendar(r, currentAllocs);
           const availableWindows = getAvailableWindows(calendar);
-          const dailyCap = r.capacity || 100;
-          const idleMd = calendar.filter(slot => slot.available >= dailyCap).length;
-          const totalWorkingDays = calendar.filter(slot => slot.totalCapacity > 0).length;
-          const utilization = totalWorkingDays > 0 ? ((totalWorkingDays - idleMd) / totalWorkingDays) * 100 : 0;
+          const remainingByMonth = getMonthlyRemainingCapacityDays(calendar);
+          const freeDaysByMonth = new Map<string, number>();
+          calendar.forEach(slot => {
+            if (slot.available >= 100) {
+              freeDaysByMonth.set(slot.monthKey, (freeDaysByMonth.get(slot.monthKey) || 0) + 1);
+            }
+          });
+          const idleMd = Array.from(remainingByMonth).reduce(
+            (sum, [monthKey, remaining]) => sum + Math.min(remaining, freeDaysByMonth.get(monthKey) || 0),
+            0,
+          );
+          const totalCapacityMd = Array.from(new Map(calendar.map(slot => [slot.monthKey, slot.monthlyCapacityDays])).values())
+            .reduce((sum, days) => sum + days, 0);
+          const utilization = totalCapacityMd > 0 ? ((totalCapacityMd - idleMd) / totalCapacityMd) * 100 : 0;
           const summary = availableWindows.map(w => `${w.from}~${w.to}`).join(', ');
           
           let finalSummary = summary ? `Free Days: ${summary}` : 'Full';
@@ -211,7 +242,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
           }
           
           return { ...r, idleMd, utilization, scheduleSummary: finalSummary };
-        }).filter(r => r.idleMd >= 1);
+        }).filter(r => r.idleMd > 0);
 
         return { gaps, idle };
       };
@@ -284,17 +315,17 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
                   if (remainingMd < 0.5) break;
                   
                   const targetMdForThisPerson = Math.min(mdPerPerson, remainingMd);
-                  const dailyCap = res.capacity || 100;
-                  const mdPerDay = dailyCap / 100;
-                  if (mdPerDay <= 0) continue;
+                  const dailyCap = 100;
+                  const mdPerDay = 1;
 
                   const resCalendar = getResourceCalendar(res, currentAllocations);
+                  const remainingCapacity = getMonthlyRemainingCapacityDays(resCalendar).get(monthStart.slice(0, 7)) || 0;
                   const monthSlots = resCalendar
                     .filter(s => s.date >= monthStart && s.date <= monthEnd && s.available >= dailyCap)
                     .sort((a, b) => a.date.localeCompare(b.date));
                   if (monthSlots.length === 0) continue;
 
-                  const daysNeeded = Math.min(Math.ceil(targetMdForThisPerson / mdPerDay), monthSlots.length);
+                  const daysNeeded = Math.min(Math.ceil(targetMdForThisPerson / mdPerDay), monthSlots.length, remainingCapacity);
                   if (daysNeeded < 1) continue;
 
                   const step = monthSlots.length / daysNeeded;
@@ -351,7 +382,8 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         const res = resources?.find(r => Number(r.id) === Number(resourceId));
         if (!res) return { startDate: "9999-12-31", maxContinuousDays: 0 };
         const calendar = getResourceCalendar(res, currentAllocs);
-        const dailyCap = res.capacity || 100;
+        const dailyCap = 100;
+        const remainingCapacity = getMonthlyRemainingCapacityDays(calendar);
         
         let bestStart = "9999-12-31";
         let currentContinuousDays = 0;
@@ -369,11 +401,13 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
              }
           }
           
-          if (slot.available >= dailyCap && !weekIsFull) {
+          const monthRemaining = remainingCapacity.get(slot.monthKey) || 0;
+          if (slot.available >= dailyCap && !weekIsFull && monthRemaining > 0) {
             if (currentContinuousDays === 0) {
                bestStart = slot.date;
             }
             currentContinuousDays++;
+            remainingCapacity.set(slot.monthKey, monthRemaining - 1);
           } else {
             if (currentContinuousDays > 0) {
                maxContinuousDays = Math.max(maxContinuousDays, currentContinuousDays);
@@ -421,16 +455,7 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
         setScheduleStatus(`🛠️ 阶段一/三：核心贪心分配 (${phase.toUpperCase()} - ${isLatePass ? '全局匹配' : '严格模式'})...`);
         const { gaps: cGaps, idle: cIdle } = runAudit(readyProjects, resources, currentAllocations);
         
-        const getPriorityWeight = (p: string) => {
-          const priorityWeight: Record<string, number> = {
-            'High': 3, 'Medium': 2, 'Low': 1,
-            '高': 3, '中': 2, '低': 1,
-            'P0': 4, 'P1': 3, 'P2': 2, 'P3': 1,
-            'Must Win': 5, 'Compliance': 4
-          };
-          return priorityWeight[p] || 0;
-        };
-        const sortedProjects = [...readyProjects].sort((a, b) => getPriorityWeight(b.priority) - getPriorityWeight(a.priority) || (a.id || 0) - (b.id || 0));
+        const sortedProjects = [...readyProjects].sort(compareProjectsByPriority);
         
         for (const project of sortedProjects) {
           checkStop();
@@ -465,9 +490,9 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
              if (Math.ceil(targetGap) < 1) break; // Filled
 
              const rIdle = cIdle.find(r => r.id === resource.id);
-             if (!rIdle || rIdle.idleMd < 1) continue;
+             if (!rIdle || rIdle.idleMd <= 0) continue;
 
-             const perc = resource.capacity || 100;
+             const perc = 100;
              let start = isValidDateStr(project.startDate) ? project.startDate! : defaultStart;
              if (phase === 'test') start = calculateTestStartDate(project.id!, currentAllocations, start);
              
@@ -477,16 +502,16 @@ export const SchedulingProvider = ({ children }: { children: ReactNode }) => {
              }
 
              const allocatableMd = Math.min(targetGap, rIdle.idleMd, maxContinuousDays);
-             const finalMd = Math.ceil(allocatableMd);
+             const finalMd = Math.min(maxContinuousDays, Math.ceil(allocatableMd));
              
-             if (finalMd >= 1) {
+             if (finalMd > 0) {
                 let endDate = calculateEndDate(startDate, finalMd, perc);
                 if (endDate > scheduleMaxDate) endDate = scheduleMaxDate;
                 if (endDate < startDate) continue;
 
                 const actualWorkingDays = getWorkingDays(new Date(startDate), new Date(endDate), workingDaySet);
                 const actualMd = Math.min(actualWorkingDays, finalMd);
-                if (actualMd < 1) continue;
+                if (actualMd <= 0) continue;
 
                 const allocToSave = { 
                   resourceId: resource.id!, 
