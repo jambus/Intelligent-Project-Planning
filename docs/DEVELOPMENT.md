@@ -71,6 +71,7 @@
 *   `extension/src/`: 核心源代码（包含 Background, Content Scripts, Options Page, Popup）。
 *   `extension/src/db/`: 数据库 Schema 定义与 Dexie 服务。
 *   `extension/src/services/`: AI 排期逻辑、文件导入解析及 Jira API 工具类。
+*   `extension/src/scheduling/`: 不依赖 React 和 Dexie 的纯排期引擎、容量日历与约束判定。
 *   `docs/DEVELOPMENT.md`: **关键** - 详细的本地开发、环境搭建与构建指令。
 *   `docs/requirement.md`: 完整的 PRD、系统架构图及详细设计规范。
 *   `docs/TASKS.md`: 项目路线图及当前任务状态。

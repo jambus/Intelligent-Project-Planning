@@ -123,10 +123,14 @@ graph TD
     Init --> AI_Score[<b>AI 批量技能打分</b><br/>获取0-1000匹配度矩阵]
     InitContinue --> AI_Score
     AI_Score --> Pass0[<b>阶段一: 运维资源离散均摊分配</b>]
-    Pass0 --> Pass1[<b>阶段二: 本队严格匹配贪心分配</b>]
-    Pass1 --> Audit[<b>阶段三: 完整性审计与按需回滚</b>]
-    Audit --> PassLate[<b>阶段四: 全局宽松匹配补漏</b>]
-    PassLate --> End([完成排期并落库 IndexedDB])
+    Pass0 --> Priority[<b>按优先级分组</b><br/>Must Win → P0 → ... → Low]
+    Priority --> Pass1[<b>当前优先级: 本队严格匹配</b>]
+    Pass1 --> Audit[<b>当前优先级: 完整性审计</b>]
+    Audit --> PassLate[<b>当前优先级: 跨团队放宽收敛</b>]
+    PassLate --> More{还有更低优先级?}
+    More -->|Yes| Priority
+    More -->|No| Plan[<b>生成 SchedulePlan</b><br/>内存中完整验证]
+    Plan --> End([完成排期并落库 IndexedDB])
 ```
 
 1.  **DailySlot 每日容量建模**：系统为每位员工在排期窗口内建立完整的日历矩阵。每一天都是一个独立的调度单元，精确记录 `usedCapacity`。
@@ -137,6 +141,8 @@ graph TD
     *   **工作日预计算**：系统在排期启动前一次性预生成排期窗口内的完整工作日集合，后续所有 MD 推算和 `endDate` 计算均直接查表。
 5.  **AI 预检与技能匹配分 (AI Pre-Scoring)**：排期开始前批量向大模型请求“候选人-项目”技能匹配分，避免在排期循环中反复调用 AI，消除了 AI 的幻觉（即 AI 只做能力打分，不干预天数和时间分配）。
 6.  **确定性贪心调度引擎 (Deterministic Greedy Engine)**：彻底移除了原先的多轮 AI 调度死循环。现在的本地排期引擎依照优先级和 AI 打分，严格且高效地寻找每个资源最早的空挡。
+    *   **纯函数计划生成**：引擎从不可变的项目、资源、锁定占用、运维与 AI 分数快照生成 `SchedulePlan`，计算期间不访问 IndexedDB。
+    *   **严格优先级组**：当前优先级必须完成本队严格匹配、完整性审计和跨团队放宽收敛，之后才允许低优先级项目进入分配，消除跨 Pass 资源抢占。
 7.  **排期完整性回滚放宽 (Relaxed Rollback)**：强制执行事务检查。若项目无法完成"研发+测试"闭环，或总覆盖率严重欠配（<30%）且确实无可用资源时才果断释放占位资源，消除过度敏感的回滚循环。对 `endDate > scheduleMaxDate` 的跨窗口项目，跳过回滚并标记 `partial_window` 状态，允许部分排期。
 8.  **毫秒级响应中断 (Aggressive Interruption)**：通过 `AbortController` 实现，点击停止后会立即取消正在进行的 AI 异步请求及后续处理。
 9.  **全链路精度保持**：内部计算（缺口、闲置、分配额）全程采用浮点数传递，仅在最终写入数据库和 UI 展现时进行四舍五入，杜绝累积偏差。
