@@ -32,7 +32,13 @@
     npm run dev
     ```
 
-4.  **在 Chrome 中加载插件**:
+4.  **运行自动化回归测试**:
+    ```bash
+    npm test
+    ```
+    测试使用 Node.js 内置的 `node:test` 运行器，覆盖排期优先级、锁定数据保留、容量 MD 换算、空闲碎片利用、稀缺资源排序、同级公平分配、事务回滚、审计指标与代表性数据集确定性等逻辑。
+
+5.  **在 Chrome 中加载插件**:
     *   打开 Chrome 浏览器，在地址栏输入 `chrome://extensions/` 并回车。
     *   开启页面右上角的 **“开发者模式” (Developer mode)**。
     *   点击左上角的 **“加载已解压的扩展程序” (Load unpacked)**。
@@ -65,6 +71,7 @@
 *   `extension/src/`: 核心源代码（包含 Background, Content Scripts, Options Page, Popup）。
 *   `extension/src/db/`: 数据库 Schema 定义与 Dexie 服务。
 *   `extension/src/services/`: AI 排期逻辑、文件导入解析及 Jira API 工具类。
+*   `extension/src/scheduling/`: 不依赖 React 和 Dexie 的纯排期引擎、容量日历与约束判定。
 *   `docs/DEVELOPMENT.md`: **关键** - 详细的本地开发、环境搭建与构建指令。
 *   `docs/requirement.md`: 完整的 PRD、系统架构图及详细设计规范。
 *   `docs/TASKS.md`: 项目路线图及当前任务状态。
