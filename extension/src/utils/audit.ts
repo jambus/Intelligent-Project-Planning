@@ -1,4 +1,4 @@
-import { getWorkingDays } from './dateUtils';
+import { getWorkingDays } from './dateUtils.ts';
 
 /**
  * Shared, pure project-gap auditor used by BOTH the scheduling engine

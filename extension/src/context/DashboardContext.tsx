@@ -3,6 +3,9 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { getWeeksInRange, calculateWeeklyMD, buildWorkingDaySet } from '../utils/dateUtils';
 import { computeProjectGaps } from '../utils/audit';
+import { getMonthlyCapacityDays } from '../utils/capacity';
+import { createScheduleAudit, type ScheduleAuditReport } from '../scheduling/audit';
+import { compareProjectsByPriority } from '../utils/priority';
 
 export interface DashboardContextType {
   selectedYear: number;
@@ -26,6 +29,7 @@ export interface DashboardContextType {
   projectGaps: any[];
   resourceIdle: any[];
   teamCapacities: any[];
+  scheduleAudit: ScheduleAuditReport;
 
   fullyScheduledProjects: any[];
   partiallyScheduledProjects: any[];
@@ -92,12 +96,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         });
       });
 
-      const leaveDays = new Set(Array.isArray(r.unavailableDates) ? r.unavailableDates : []);
-      let activeWorkingDays = 0;
-      currentWorkingDaySet.forEach(d => {
-        if (!leaveDays.has(d)) activeWorkingDays++;
-      });
-      const capacityMd = (activeWorkingDays * r.capacity) / 100;
+      const leaveDays = new Set<string>(Array.isArray(r.unavailableDates) ? r.unavailableDates : []);
+      const capacityMd = Array.from(getMonthlyCapacityDays(currentWorkingDaySet, leaveDays, r.capacity).values())
+        .reduce((sum, days) => sum + days, 0);
       const utilization = capacityMd > 0 ? (totalAllocatedMdInRange / capacityMd) * 100 : 0;
       return { ...r, idleMd: Math.max(0, capacityMd - totalAllocatedMdInRange), allocatedMd: totalAllocatedMdInRange, capacityMd, utilization };
     });
@@ -177,18 +178,9 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
       const isFullyScheduled = devDone && testDone;
       const hasAllocations = pAllocs.length > 0;
 
-      const reasonMap: Record<string, string> = {
-        'lead_not_idle': 'Lead 不可用',
-        'no_dev_capacity': '开发容量不足',
-        'no_test_capacity': '测试容量不足',
-        'date_window_exceeded': '时间窗口不足',
-        'scrum_constraint_violated': '指定团队容量不足',
-        'partial_window': '跨窗口部分排期'
-      };
-
       let reason = '';
       if (!isFullyScheduled && p.rejectionReason) {
-        reason = reasonMap[p.rejectionReason] || p.rejectionReason;
+        reason = p.rejectionReason;
       }
 
       return { 
@@ -204,7 +196,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         hasAllocations,
         unscheduledReason: reason
       };
-    }).sort((a, b) => Number(a.id) - Number(b.id));
+    }).sort(compareProjectsByPriority);
 
     return {
       fullyScheduledProjects: enriched.filter(p => p.isFullyScheduled),
@@ -212,6 +204,13 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
       unscheduledProjects: enriched.filter(p => !p.isFullyScheduled && !p.hasAllocations)
     };
   }, [projects, allocations, resources, resourceIdle]);
+
+  const scheduleAudit = useMemo(() => createScheduleAudit(
+    projects,
+    resources,
+    allocations,
+    workingDaySet,
+  ), [projects, resources, allocations, workingDaySet]);
 
   return (
     <DashboardContext.Provider value={{
@@ -223,6 +222,7 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
       displayWeeksGrouped,
       projects, resources, allocations, operations, scrumTeams,
       readyProjects, pendingProjects, projectGaps, resourceIdle, teamCapacities,
+      scheduleAudit,
       fullyScheduledProjects, partiallyScheduledProjects, unscheduledProjects
     }}>
       {children}

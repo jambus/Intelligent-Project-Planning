@@ -1,127 +1,96 @@
-# Project Guidelines
+# AI Agent Instructions - Intelligent Resource Planner
+
+This file is intentionally written as plain Markdown so it can be used by both Gemini-style agent files (`GEMINI.md`) and Codex agent files (`AGENTS.md`). If both files are maintained, keep their project rules synchronized.
+
+## Project Context
+
+The Intelligent Resource Planner (IRP) is a local-first Chrome Extension for R&D resource scheduling using AI.
+
+- Single source of truth for product requirements and architecture: `docs/requirement.md`
+- Local development, build, and packaging guide: `docs/DEVELOPMENT.md`
+- Extension source root: `extension/`
+
+## Core Mandates
+
+1. **Build and packaging are required after code changes.** Every code modification must pass `npm run build` and the ZIP packaging step before the task is considered complete. Prefer the project script:
+   ```bash
+   cd extension
+   npm run build
+   npm run zip
+   ```
+   If `docs/DEVELOPMENT.md` defines a newer packaging process, follow that document.
+2. **Keep requirements synchronized.** Any new functional requirement, feature addition, or design change must be reflected in `docs/requirement.md` before or during implementation.
+3. **Use the PRD as the authority.** Always refer to `docs/requirement.md` for functional requirements and architectural decisions.
+4. **Maintain development docs.** Update `docs/DEVELOPMENT.md` when build scripts, project structure, setup steps, packaging, or dependencies change.
+5. **Preserve local-first architecture.** This is a serverless Chrome Extension. Do not introduce backend services, remote databases, or external runtime dependencies unless explicitly requested.
+6. **Protect secrets.** API keys and credentials must be read from `chrome.storage.local` or approved local environment mechanisms. Never hardcode or log secrets.
 
 ## Build and Test
 
 ```bash
 cd extension && npm install   # install dependencies
-cd extension && npm run build # TypeScript check + Vite production build → dist/
+cd extension && npm run build # TypeScript check + Vite production build -> dist/
+cd extension && npm run zip   # package dist/ into release ZIP
 cd extension && npm run dev   # Vite HMR dev server
 cd extension && npm run lint  # ESLint
 ```
 
-**Every code change MUST pass `npm run build` before the task is considered complete.** The build runs `tsc -b` (strict mode) then Vite bundling.
-
-No automated test framework exists — validation is manual via extension loading in Chrome.
+No automated test framework currently exists. Validate manually by loading or reloading `extension/dist` in `chrome://extensions` when behavior changes.
 
 ## Architecture
 
-Chrome Extension (Manifest V3). Local-first, no backend server. Data flows:
+Chrome Extension (Manifest V3). Data stays local by default.
 
-- **`chrome.storage.local`** → API keys, user settings (via `src/utils/storage.ts` wrapper)
-- **IndexedDB (Dexie v2)** → business data: projects, resources, allocations, worklogs, skills
+- `chrome.storage.local`: API keys and user settings, accessed through `src/utils/storage.ts`
+- IndexedDB (Dexie v2): business data such as projects, resources, allocations, worklogs, and skills
 
 Key directories under `extension/src/`:
 
 | Directory | Purpose |
-|-----------|---------|
-| `db/` | Dexie schema + CRUD service layer |
+| --- | --- |
+| `db/` | Dexie schema and CRUD service layer |
 | `services/` | AI scheduling, Jira API, file import, Google Sheets |
 | `utils/` | Chrome storage wrapper, working-day calendar |
 | `context/` | React Context for global scheduling state |
 | `options/pages/` | Options SPA routes (HashRouter) |
 | `popup/` | Browser action popup |
-| `content/` | Jira page content script (load alerts) |
-| `background/` | Service worker (minimal) |
-
-For full PRD and architecture: [docs/requirement.md](docs/requirement.md)  
-For build/setup details: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+| `content/` | Jira page content script and load alerts |
+| `background/` | Service worker |
 
 ## Conventions
 
-- **Language**: UI labels, role names, and comments are in Chinese. Roles: 前端/后端/APP/全栈/开发组长/测试工程师/测试组长
-- **TypeScript strict mode**: `noUnusedLocals`, `noUnusedParameters` — unused imports/vars fail the build
-- **Dexie schema changes**: Must increment version number AND redefine all tables in the new version block
-- **API keys**: Never hardcoded — always via `chrome.storage.local`. Never log secrets.
-- **Jira sync**: `syncEpicLoggedHours()` in `services/jira.ts` must receive ALL epic keys in one batch call (not per-project). The JQL uses `project in (...)`, wildcard `*`, and `created >= -365d` — do not remove any of these.
-- **Priority = insertion order**: Project priority determined by auto-increment DB ID (CSV import order). No manual sort.
-- **Working days**: Holidays hardcoded in `utils/dateUtils.ts` for 2026 — requires annual maintenance.
-- **AI scheduling**: Called per-project sequentially. JS enforces hard caps via `Math.min(aiSuggestion, projectGap, resourceIdle)`. **One task per day** — each person can only work on one task (ops or project) per day; weekly schedule values are always integers (no decimals). Multiple projects CAN share a week (different days), but never share a single day.
-- **Fuzzy dates**: CSV import normalizes informal date strings ("Apr", "Q3", "Jun (UAT...)") to ISO dates via `normalizeDateField()` in `fileImport.ts`.
-- **Styling**: Tailwind CSS utility classes. No separate CSS modules.
-- **Icons**: Lucide React (`lucide-react` package).
+- UI labels, role names, and code comments are in Chinese.
+- Role names: 前端, 后端, APP, 全栈, 开发组长, 测试工程师, 测试组长.
+- TypeScript runs in strict mode with `noUnusedLocals` and `noUnusedParameters`; unused imports or variables fail the build.
+- Styling uses Tailwind CSS utility classes. Do not add separate CSS modules unless requested.
+- Use `lucide-react` for icons.
+- Keep changes minimal and directly tied to the task. Do not refactor unrelated code.
 
-## Pitfalls
+## Domain Rules and Pitfalls
 
-- After modifying code, always reload the extension in `chrome://extensions` to test changes
-- `useLiveQuery()` (Dexie) triggers async re-renders on DB mutations — be careful with allocation logic
-- Content script only matches `*://*.atlassian.net/browse/*`
-- The `@crxjs/vite-plugin` is a beta (2.0.0-beta.33) — check compatibility when upgrading Vite
-- **Calendar dates**: Use `formatLocalDate(date)` from `utils/dateUtils.ts` for any `YYYY-MM-DD` date key. Never use `toISOString().split('T')[0]` for scheduling/working-day/holiday logic — it shifts by a day in UTC+8.
-- **Holiday config**: Scheduling must `await loadHolidaysConfig()` before building the working-day set, otherwise user-defined holidays in `db.settings` are ignored.
-- **Gap calculation**: `runAudit` (engine) and `runAuditForUI` (Dashboard) share `computeProjectGaps` in `utils/audit.ts`. Keep MD accumulation at full float precision; round only at final write/display.
-- **Imports are destructive**: project/resource file import does `db.<table>.clear()` then `bulkAdd` — it REPLACES the whole table. UI must confirm before import when data exists.
-- **Cascade deletes**: `deleteResource`/`deleteProject` also delete related `allocations` to avoid orphan schedule rows. Preserve this when editing the service layer.
-- **PRD doc is UTF-8 with very long lines**: the buffer-based edit tools may read a stale/empty view of `docs/requirement.md`. Verify against disk if an edit fails to match.
+- Dexie schema changes must increment the database version and redefine all tables in the new version block.
+- Jira sync: `syncEpicLoggedHours()` in `services/jira.ts` must receive all epic keys in one batch call, not per project. The JQL must retain `project in (...)`, wildcard `*`, and `created >= -365d`.
+- Project priority is insertion order, determined by auto-increment DB ID and CSV import order. Do not add manual sorting unless requested.
+- Working-day and holiday logic must use `formatLocalDate(date)` from `utils/dateUtils.ts` for `YYYY-MM-DD` date keys. Do not use `toISOString().split('T')[0]` for scheduling, working-day, or holiday keys.
+- Scheduling must `await loadHolidaysConfig()` before building the working-day set so user-defined holidays in `db.settings` are honored.
+- AI scheduling runs per project sequentially. JavaScript enforces hard caps with `Math.min(aiSuggestion, projectGap, resourceIdle)`.
+- One task per person per day: a person can only work on one operations or project task on a given day. Weekly schedule values are always integers; multiple projects may share a week on different days, but never a single day for the same person.
+- Gap calculation is shared by `runAudit` and `runAuditForUI` through `computeProjectGaps` in `utils/audit.ts`. Keep MD accumulation at full float precision and round only at final write or display.
+- CSV import normalizes fuzzy date strings such as `"Apr"`, `"Q3"`, and `"Jun (UAT...)"` to ISO dates via `normalizeDateField()` in `fileImport.ts`.
+- Project and resource imports are destructive: they clear the relevant table and replace it with imported data. UI must confirm before import when existing data is present.
+- `deleteResource` and `deleteProject` must also delete related `allocations` to avoid orphan schedule rows.
+- `useLiveQuery()` triggers async re-renders after Dexie mutations; be careful with allocation and scheduling UI flows.
+- Content script matches only `*://*.atlassian.net/browse/*`.
+- The `@crxjs/vite-plugin` version is beta; check compatibility before upgrading Vite.
+- Holidays are currently maintained in code for 2026 and require annual maintenance.
+- `docs/requirement.md` is UTF-8 with very long lines. If an edit fails to match, verify the content directly from disk before retrying.
 
+## Execution Style
 
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+1. Think before coding. State assumptions when they matter; ask when ambiguity would make the change risky.
+2. Choose the simplest implementation that satisfies the request. Do not add speculative options, abstractions, or configurability.
+3. Make surgical edits. Preserve existing style and do not clean up unrelated code.
+4. Remove only unused imports, variables, or functions introduced by your own change.
+5. Define success criteria for multi-step work and verify them.
+6. For code changes, run `npm run build` and package the extension before reporting completion. Mention any validation that could not be performed.
 
-## 1. Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-## 2. Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-## 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
----
-
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

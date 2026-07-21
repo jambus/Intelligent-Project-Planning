@@ -199,8 +199,24 @@ export const ScheduleDetails = () => {
                     if (!map.has(key)) map.set(key, []);
                     map.get(key)!.push(a);
                   });
-                  
-                  return Array.from(map.values()).map((group) => {
+
+                  const resourceNameById = new Map(resources.map(resource => [Number(resource.id), resource.name]));
+                  const projectNameById = new Map(projects.map(project => [Number(project.id), project.name]));
+                  operations.forEach(operation => {
+                    projectNameById.set(-(Number(operation.id) + 1000000), `${t('dashboard.opPrefix')}${operation.productName}`);
+                  });
+                  const groupedByResource = Array.from(map.values()).sort((left, right) => {
+                    const leftAllocation = left[0];
+                    const rightAllocation = right[0];
+                    const resourceDifference = (resourceNameById.get(Number(leftAllocation.resourceId)) || '')
+                      .localeCompare(resourceNameById.get(Number(rightAllocation.resourceId)) || '', undefined, { sensitivity: 'base', numeric: true });
+                    if (resourceDifference !== 0) return resourceDifference;
+                    const projectDifference = (projectNameById.get(Number(leftAllocation.projectId)) || '')
+                      .localeCompare(projectNameById.get(Number(rightAllocation.projectId)) || '', undefined, { sensitivity: 'base', numeric: true });
+                    return projectDifference || Number(leftAllocation.projectId) - Number(rightAllocation.projectId);
+                  });
+
+                  return groupedByResource.map((group) => {
                     const alloc = group[0];
                     const resource = resources.find(r => Number(r.id) === Number(alloc.resourceId));
                     const isOp = Number(alloc.projectId) <= -1000000;

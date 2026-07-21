@@ -1,19 +1,21 @@
 import { useState } from 'react';
 import { useDashboard } from '../../../context/DashboardContext';
 import { useTranslation } from '../../../context/I18nContext';
-import { FolderKanban, Search, AlertTriangle, XCircle, CheckCircle2 } from 'lucide-react';
+import { FolderKanban, Search, AlertTriangle, XCircle, CheckCircle2, ShieldCheck, Gauge, ChartNoAxesCombined, CalendarSearch } from 'lucide-react';
 
 export const ProjectResults = () => {
   const { 
-    readyProjects, pendingProjects, fullyScheduledProjects, partiallyScheduledProjects, unscheduledProjects 
+    readyProjects, pendingProjects, fullyScheduledProjects, partiallyScheduledProjects, unscheduledProjects, scheduleAudit,
   } = useDashboard();
   const { t } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'fully'>('pending');
 
   // Constraint diagnostics (#30.6) — count rejection reasons
+  const reasonLabel = (reason: string) => reason ? t(`dashboard.reason.${reason}`) : '-';
+
   const constraintCounts = [...unscheduledProjects, ...partiallyScheduledProjects].reduce((acc, p) => {
-    const r = p.unscheduledReason || t('dashboard.reasonUnknown');
+    const r = p.unscheduledReason ? reasonLabel(p.unscheduledReason) : t('dashboard.reasonUnknown');
     acc[r] = (acc[r] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -78,7 +80,7 @@ export const ProjectResults = () => {
                     {!p.assignedDevs && !p.assignedTesters && <span className="text-gray-300 italic">{t('dashboard.notAssigned')}</span>}
                   </td>
                   <td className="p-4 text-[10px] text-red-500 font-bold">
-                    {p.unscheduledReason || '-'}
+                    {reasonLabel(p.unscheduledReason)}
                   </td>
                 </tr>
               );
@@ -97,6 +99,35 @@ export const ProjectResults = () => {
           <p className="text-xs font-bold text-gray-400 mt-1.5">{t('dashboard.projectResultsDesc')}</p>
         </div>
       </div>
+
+      <section className="border-y border-gray-200 bg-white">
+        <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100">
+          {[
+            { label: t('dashboard.auditInversions'), value: scheduleAudit.priorityInversions, icon: ShieldCheck, alert: scheduleAudit.priorityInversions > 0 },
+            { label: t('dashboard.auditOverloads'), value: scheduleAudit.overloads, icon: Gauge, alert: scheduleAudit.overloads > 0 },
+            { label: t('dashboard.auditMatchableIdle'), value: `${scheduleAudit.matchableIdleMd} MD`, icon: CalendarSearch, alert: scheduleAudit.matchableIdleMd > 0 },
+            { label: t('dashboard.auditUtilization'), value: `${scheduleAudit.utilizationRate.toFixed(1)}%`, icon: ChartNoAxesCombined, alert: false },
+          ].map(item => (
+            <div key={item.label} className="p-4 min-w-0">
+              <div className="flex items-center gap-2 text-gray-400">
+                <item.icon size={15} />
+                <span className="text-[10px] font-black uppercase">{item.label}</span>
+              </div>
+              <div className={`mt-2 text-xl font-black ${item.alert ? 'text-orange-600' : 'text-gray-900'}`}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+        {scheduleAudit.priorityCompletion.length > 0 && (
+          <div className="border-t border-gray-100 px-4 py-3 flex flex-wrap gap-x-5 gap-y-2">
+            <span className="text-[10px] font-black text-gray-400 uppercase">{t('dashboard.auditPriorityCompletion')}</span>
+            {scheduleAudit.priorityCompletion.map(item => (
+              <span key={item.weight} className="text-xs font-bold text-gray-700">
+                {item.priority}: {item.completionRate.toFixed(1)}%
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Tabs Header */}

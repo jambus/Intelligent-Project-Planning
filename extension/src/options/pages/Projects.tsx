@@ -5,25 +5,7 @@ import { FolderKanban, Info, UploadCloud, Download } from 'lucide-react';
 import { importProjectsFromFile } from '../../services/fileImport';
 import { ErrorModal } from '../components/ErrorModal';
 import { useTranslation } from '../../context/I18nContext';
-
-const priorityWeight: Record<string, number> = {
-  'High': 3,
-  'Medium': 2,
-  'Low': 1,
-  '高': 3,
-  '中': 2,
-  '低': 1,
-  'P0': 4,
-  'P1': 3,
-  'P2': 2,
-  'P3': 1,
-  'Must Win': 5,
-  'Compliance': 4
-};
-
-const getPriorityWeight = (p: string) => {
-  return priorityWeight[p] || 0;
-};
+import { getPriorityWeight } from '../../utils/priority';
 
 export const Projects = () => {
   const { t } = useTranslation();
